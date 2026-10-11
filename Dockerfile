@@ -9,7 +9,8 @@ ARG PNPM_VERSION=9.15.9
 FROM node:${NODE_VERSION}-slim AS build
 ARG PNPM_VERSION
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
+# npm installs pnpm directly: the corepack bundled with Node 22.12 has outdated signing keys.
+RUN npm install -g pnpm@${PNPM_VERSION}
 
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -22,7 +23,8 @@ RUN pnpm run build
 FROM node:${NODE_VERSION}-slim AS deps
 ARG PNPM_VERSION
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
+# npm installs pnpm directly: the corepack bundled with Node 22.12 has outdated signing keys.
+RUN npm install -g pnpm@${PNPM_VERSION}
 
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
