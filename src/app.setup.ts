@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { ADMIN_SECURITY_SCHEME } from './common/decorators/admin-only.decorator.js';
 import { ADMIN_API_KEY_HEADER } from './common/guards/admin-api-key.guard.js';
 import { AppConfigService } from './config/app-config.service.js';
+import { applyDemoRateLimits } from './modules/demo/presentation/demo-rate-limits.js';
 
 export const API_PREFIX = 'api/v1';
 export const DOCS_PATH = 'docs';
@@ -32,6 +33,9 @@ export function configureApp(app: INestApplication): OpenAPIObject {
     // Lets the website read how many demo requests remain and when to retry.
     exposedHeaders: ['Retry-After', 'X-Demo-Remaining', 'X-Demo-Limit-Scope'],
   });
+  // Public demo AI routes: per-visitor and shared hourly limits, before any work happens.
+  // After CORS, so a refusal still reaches the website with its message.
+  applyDemoRateLimits(app, API_PREFIX);
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, stopAtFirstError: false }),
   );

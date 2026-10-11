@@ -16,7 +16,6 @@ export const TEST_ENV: Env = {
   AGENT_LLM_PROVIDER: 'gemini',
   GEMINI_API_KEY: 'test-gemini-key',
   AGENT_MODEL: 'gemini-3.8-flash',
-  REDIS_URL: undefined,
   TRUST_PROXY_HOPS: 0,
   DEMO_AI_HOURLY_BUDGET: 600,
   DEMO_SPEECH_HOURLY_BUDGET: 600,

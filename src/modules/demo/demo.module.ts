@@ -15,19 +15,17 @@ import { DEMO_SCENARIOS } from './domain/demo-scenarios.js';
 import { ReplyTranslator } from './domain/reply-translator.port.js';
 import { GeminiReplyTranslator } from './infrastructure/gemini-reply-translator.js';
 import { AppConfigService } from '../../config/app-config.service.js';
-import { DemoRateLimiter } from './application/demo-rate-limiter.js';
 import { DEFAULT_VISITOR_LIMITS, DEMO_LIMITS, type DemoLimits } from './domain/demo-limits.js';
 import { DemoController } from './presentation/demo.controller.js';
-import { DemoRateLimitGuard } from './presentation/demo-rate-limit.guard.js';
 
 @Module({
   imports: [CalculatorsModule, KnowledgeModule, ContractsModule, AgentModule, SafetyModule, SpeechModule],
   controllers: [DemoController],
+  // DEMO_LIMITS is read by the Express rate-limit middleware (see demo-rate-limits.ts).
+  exports: [DEMO_LIMITS],
   providers: [
     DemoContractService,
     DemoChatService,
-    DemoRateLimiter,
-    DemoRateLimitGuard,
     {
       provide: DEMO_LIMITS,
       inject: [AppConfigService],

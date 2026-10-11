@@ -1,0 +1,97 @@
+# CI/CD for the Haqdar API.
+#   Every push and pull request: lint, typecheck and all tests.
+#   Push to main: build the Docker image, push it to Artifact Registry, and roll it out to
+#   the Cloud Run service you created. Only the image changes: the service's settings
+#   (environment, secrets, Cloud SQL connection, instances) stay as you set them in Google Cloud.
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Only one deployment at a time; a newer push waits for the running one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: ${{ vars.GCP_REGION }}
+  SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'haqdar-api' }}
+  IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPOSITORY || 'haqdar' }}/${{ vars.CLOUD_RUN_SERVICE || 'haqdar-api' }}
+
+jobs:
+  test:
+    name: Lint, typecheck and test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: haqdar_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run typecheck
+      - name: Unit and end-to-end tests
+        run: pnpm run test:all
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/haqdar_test
+
+  deploy:
+    name: Build and deploy to Cloud Run
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # lets GitHub sign in to Google without a stored key
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sign in to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push the image
+        run: |
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          docker build -t "${IMAGE}:${GITHUB_SHA}" -t "${IMAGE}:latest" .
+          docker push --all-tags "${IMAGE}"
+
+      # Updates the existing service to the new image. It never creates a service or
+      # changes its settings, and fails clearly if the service doesn't exist yet.
+      - name: Roll out the new image
+        run: |
+          gcloud run services update "${SERVICE}" \
+            --project "${PROJECT_ID}" \
+            --region "${REGION}" \
+            --image "${IMAGE}:${GITHUB_SHA}"
+
+      - name: Check the deployed API
+        run: |
+          URL=$(gcloud run services describe "${SERVICE}" --project "${PROJECT_ID}" --region "${REGION}" --format 'value(status.url)')
+          curl --fail --silent --show-error --retry 5 --retry-delay 5 "${URL}/health"
+          echo "### Deployed ${GITHUB_SHA::7} to ${URL}" >> "${GITHUB_STEP_SUMMARY}"

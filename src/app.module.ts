@@ -4,7 +4,6 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { CryptoModule } from './common/crypto/crypto.module.js';
-import { RateLimitModule } from './common/rate-limit/rate-limit.module.js';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
 import { AppConfigModule } from './config/config.module.js';
 import { DatabaseModule } from './database/database.module.js';
@@ -23,7 +22,6 @@ import { WhatsAppWebhookModule } from './modules/whatsapp-webhook/whatsapp-webho
     // Platform
     AppConfigModule,
     CryptoModule,
-    RateLimitModule,
     DatabaseModule,
     LlmModule,
     ScheduleModule.forRoot(),

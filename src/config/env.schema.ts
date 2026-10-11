@@ -33,8 +33,6 @@ export const envSchema = z.object({
   HASH_SECRET: z.string().min(32),
   ADMIN_API_KEY: z.string().min(24),
 
-  /** Shared store for rate limits across servers. Without it each server counts on its own. */
-  REDIS_URL: z.url({ protocol: /^rediss?$/ }).optional(),
   /** Proxies/CDNs in front of the app, so the visitor's real IP is used for rate limits. */
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
   /** Ceilings on the public demo's AI use, all visitors together, per hour. */

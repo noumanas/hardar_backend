@@ -105,7 +105,7 @@ Errors always look like `{ statusCode, error, message, path, timestamp }`.
 
 ## Rate limits on the public demo
 
-The demo's AI routes are limited per visitor (by a hash of their IP, never the raw address) and for all visitors together, so one person can't run up the Gemini bill and the total has a ceiling. Counters live in Redis (`REDIS_URL`), so the limits hold across any number of servers; without Redis, or if it goes down, each server counts on its own.
+The demo's AI routes are limited per visitor (keyed by a hash of their IP, never the raw address) and for all visitors together, so one person can't run up the Gemini bill and the total has a ceiling. The limits are Express middleware ([express-rate-limit](https://github.com/express-rate-limit/express-rate-limit), mounted in `app.setup.ts` from `demo/presentation/demo-rate-limits.ts`) and count in the server's memory. That is right for one server; with several servers each counts on its own, so move the counts to a shared store (express-rate-limit supports Redis) before scaling out.
 
 | Requests | Per visitor | Everyone together |
 |---|---|---|

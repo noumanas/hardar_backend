@@ -18,7 +18,11 @@ describe('Public demo rate limits (e2e)', () => {
         geminiClient: { models: { generateContent } },
         demoLimits: {
           visitor: {
-            ai: [{ limit: 2, ms: MINUTE, name: 'minute' }],
+            // The tighter window decides what "remaining" reports.
+            ai: [
+              { limit: 2, ms: MINUTE, name: 'minute' },
+              { limit: 5, ms: 60 * MINUTE, name: 'hour' },
+            ],
             speech: [{ limit: 5, ms: MINUTE, name: 'minute' }],
             contract: [{ limit: 5, ms: MINUTE, name: 'minute' }],
           },

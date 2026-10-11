@@ -1,0 +1,18 @@
+# Keep the image small and secrets out of it: only package files, configs and src/ are needed.
+node_modules
+dist
+coverage
+test
+.git
+.github
+.env
+.env.*
+*.log
+nohup.out
+.DS_Store
+.idea
+.vscode
+Dockerfile
+.dockerignore
+README.md
+DEPLOY-CLOUD-RUN.md

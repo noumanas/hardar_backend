@@ -8,7 +8,6 @@ import {
   Post,
   StreamableFile,
   UploadedFile,
-  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -56,7 +55,6 @@ import {
   DemoVoiceReplyDto,
   DemoVoiceRequestDto,
 } from './dto/demo.dto.js';
-import { DemoLimit, DemoRateLimitGuard } from './demo-rate-limit.guard.js';
 
 /**
  * Public API behind the website's "Try the demo". No sign-in and nothing stored: the
@@ -67,7 +65,6 @@ import { DemoLimit, DemoRateLimitGuard } from './demo-rate-limit.guard.js';
   description:
     'A visitor or the demo as a whole is over its limit. `Retry-After` says when to try again; `X-Demo-Limit-Scope` is `visitor` or `everyone`.',
 })
-@UseGuards(DemoRateLimitGuard)
 @Throttle({ default: { ttl: 60_000, limit: 60 } })
 @Controller('demo')
 export class DemoController {
@@ -79,7 +76,6 @@ export class DemoController {
 
   @Post('chat')
   @HttpCode(HttpStatus.OK)
-  @DemoLimit('ai')
   @ApiOperation({
     summary: 'Chat with the real Haqdar agent',
     description:
@@ -105,7 +101,6 @@ export class DemoController {
 
   @Post('speech')
   @HttpCode(HttpStatus.OK)
-  @DemoLimit('speech')
   @ApiOperation({
     summary: 'A Haqdar reply as a voice note',
     description:
@@ -122,7 +117,6 @@ export class DemoController {
 
   @Post('voice')
   @HttpCode(HttpStatus.OK)
-  @DemoLimit('ai')
   @UseInterceptors(FileInterceptor('audio', { limits: { fileSize: DEMO_VOICE_MAX_BYTES, files: 1 } }))
   @ApiOperation({
     summary: 'Send a voice note to the real Haqdar agent',
@@ -182,7 +176,6 @@ export class DemoController {
 
   @Post('contract')
   @HttpCode(HttpStatus.OK)
-  @DemoLimit('contract')
   @UseInterceptors(FileInterceptor('contract', { limits: { fileSize: DEMO_CONTRACT_MAX_BYTES, files: 1 } }))
   @ApiOperation({
     summary: 'Read a contract photo or PDF',
