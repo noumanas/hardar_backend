@@ -2,14 +2,14 @@
 # Three stages: build with dev dependencies, install production dependencies alone,
 # then a small runtime image that holds only those and the compiled app.
 
-ARG NODE_VERSION=22.12.0
+ARG NODE_VERSION=22.22.2
 ARG PNPM_VERSION=9.15.9
 
 # ── 1. Build ─────────────────────────────────────────────────────────
 FROM node:${NODE_VERSION}-slim AS build
 ARG PNPM_VERSION
 WORKDIR /app
-# npm installs pnpm directly: the corepack bundled with Node 22.12 has outdated signing keys.
+# npm installs pnpm directly: some Node 22 releases bundle a corepack with outdated signing keys.
 RUN npm install -g pnpm@${PNPM_VERSION}
 
 COPY package.json pnpm-lock.yaml ./
@@ -23,7 +23,7 @@ RUN pnpm run build
 FROM node:${NODE_VERSION}-slim AS deps
 ARG PNPM_VERSION
 WORKDIR /app
-# npm installs pnpm directly: the corepack bundled with Node 22.12 has outdated signing keys.
+# npm installs pnpm directly: some Node 22 releases bundle a corepack with outdated signing keys.
 RUN npm install -g pnpm@${PNPM_VERSION}
 
 COPY package.json pnpm-lock.yaml ./
