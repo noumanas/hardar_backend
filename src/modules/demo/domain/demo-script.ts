@@ -34,8 +34,8 @@ export type CardValue =
 
 export interface ScriptMessage {
   text: string;
-  /** A line in Urdu script under the English text. */
-  urdu?: string;
+  /** A line in Arabic under the English text. */
+  arabic?: string;
   /** Looked up in the knowledge base; `fallback` is shown if nothing matches. */
   source?: { query: string; fallback: string };
   card?: { label: string; value: CardValue; tone: CardTone };

@@ -38,7 +38,7 @@ describe('DemoService', () => {
       nextScenarioId: 'passport-kept',
     });
     expect(turn.messages[0]).toMatchObject({ source: null, card: null, followUp: false });
-    expect(turn.messages[0].urdu).toBeTruthy();
+    expect(turn.messages[0].arabic).toBeTruthy();
   });
 
   it('rejects an unknown case', async () => {

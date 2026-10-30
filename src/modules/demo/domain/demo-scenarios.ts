@@ -2,7 +2,7 @@ import { AgentStage, CaseStep, NEXT_SCENARIO, type DemoScenario, type ScriptMess
 
 const GREETING: ScriptMessage = {
   text: 'Assalam o Alaikum! I am Haqdar. Tell me your problem by voice or text. This is a demo with an example case.',
-  urdu: 'السلام علیکم! میں حقدار ہوں۔ اپنا مسئلہ بتائیں۔',
+  arabic: 'السلام عليكم! أنا حقدار. أخبرني بمشكلتك.',
 };
 
 const BASIC_SALARY = 1500;
@@ -118,7 +118,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
               tone: 'lime',
             },
           },
-          { text: 'If it happens again, just message me. Haqdar is free, any time.', urdu: 'آپ کا حق آپ کو مل گیا۔' },
+          { text: 'If it happens again, just message me. Haqdar is free, any time.', arabic: 'لقد حصلت على حقك.' },
         ],
         chips: [{ label: 'Try another problem', next: NEXT_SCENARIO }],
       },

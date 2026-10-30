@@ -44,7 +44,7 @@ class DemoCardDto {
 
 class DemoMessageDto {
   @ApiProperty() text: string;
-  @ApiProperty({ nullable: true, type: String, description: 'A line in Urdu script' }) urdu: string | null;
+  @ApiProperty({ nullable: true, type: String, description: 'A line in Arabic' }) arabic: string | null;
   @ApiProperty({
     nullable: true,
     type: String,

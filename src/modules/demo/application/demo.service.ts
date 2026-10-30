@@ -23,7 +23,7 @@ export interface DemoScenarioSummary {
 
 export interface DemoMessage {
   text: string;
-  urdu: string | null;
+  arabic: string | null;
   source: string | null;
   card: { label: string; value: string; tone: CardTone } | null;
   followUp: boolean;
@@ -119,7 +119,7 @@ export class DemoService {
   private async renderMessage(message: ScriptMessage): Promise<DemoMessage> {
     return {
       text: message.text,
-      urdu: message.urdu ?? null,
+      arabic: message.arabic ?? null,
       source: message.source ? await this.lookUpSource(message.source.query, message.source.fallback) : null,
       card: message.card
         ? { label: message.card.label, value: this.cardValue(message.card.value), tone: message.card.tone }
