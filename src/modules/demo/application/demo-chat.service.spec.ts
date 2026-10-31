@@ -14,6 +14,7 @@ import { UrgentCaseDetector } from '../../safety/domain/urgent-case.detector.js'
 import type { SpeechToText, TextToSpeech } from '../../speech/domain/speech.ports.js';
 import type { GeminiTextToSpeech } from '../../speech/infrastructure/gemini-text-to-speech.js';
 import { AgentStage, CaseStep } from '../domain/demo-script.js';
+import type { FollowUpSuggester } from '../domain/follow-up-suggester.port.js';
 import { needsTranslation, type ReplyTranslator } from '../domain/reply-translator.port.js';
 import {
   citedSources,
@@ -42,6 +43,9 @@ function setup() {
   const translator = {
     toEnglish: vi.fn<ReplyTranslator['toEnglish']>().mockResolvedValue('Your salary must be paid.'),
   };
+  const followUps = {
+    suggest: vi.fn<FollowUpSuggester['suggest']>().mockResolvedValue(['How do I complain to MOHRE?']),
+  };
   const service = new DemoChatService(
     runner,
     new UrgentCaseDetector(),
@@ -49,8 +53,9 @@ function setup() {
     voice as unknown as GeminiTextToSpeech,
     new CryptoService(testConfig()),
     translator,
+    followUps,
   );
-  return { runner, speech, voice, translator, service };
+  return { runner, speech, voice, translator, followUps, service };
 }
 
 describe('DemoChatService', () => {
@@ -85,6 +90,7 @@ describe('DemoChatService', () => {
       reply: 'Your gratuity is AED 7,500.',
       translation: null,
       citations: ['Decree-Law 33/2021, Art. 51'],
+      suggestions: ['How do I complain to MOHRE?'],
       tools: ['search_labour_law', 'get_complaint_guide'],
       urgent: false,
       progress: { caseStep: CaseStep.ComplaintGuided, agentStage: AgentStage.UsingTools },
@@ -288,6 +294,28 @@ describe('DemoChatService translations and feedback', () => {
       await expect(service.reply('hi', [])).resolves.toMatchObject({ reply: 'حقدار', translation: null });
     },
   );
+
+  it('suggests follow-up questions from the question and the answer', async () => {
+    const { followUps, service } = setup();
+    expect((await service.reply('  how much gratuity?  ', [])).suggestions).toEqual(['How do I complain to MOHRE?']);
+    expect(followUps.suggest).toHaveBeenCalledWith('how much gratuity?', 'Your gratuity is AED 7,500.');
+  });
+
+  it('suggests nothing for the fallback reply', async () => {
+    const { runner, followUps, service } = setup();
+    runner.run.mockResolvedValue(result({ text: null }));
+    expect((await service.reply('hi', [])).suggestions).toEqual([]);
+    expect(followUps.suggest).not.toHaveBeenCalled();
+  });
+
+  it('shows the answer without suggestions when they fail', async () => {
+    const { followUps, service } = setup();
+    followUps.suggest.mockRejectedValue(new Error('quota'));
+    await expect(service.reply('hi', [])).resolves.toMatchObject({
+      reply: 'Your gratuity is AED 7,500.',
+      suggestions: [],
+    });
+  });
 
   it('logs feedback as a rating and tool names only', () => {
     const { service } = setup();

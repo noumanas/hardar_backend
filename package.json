@@ -20,6 +20,8 @@
     "migration:run": "nest build && typeorm -d dist/database/data-source.js migration:run",
     "migration:revert": "nest build && typeorm -d dist/database/data-source.js migration:revert",
     "seed": "nest build && node dist/database/seeds/run-seed.js",
+    "import:laws": "nest build && node dist/database/seeds/run-law-import.js",
+    "laws:export": "nest build && node dist/database/seeds/run-law-export.js",
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
     "test:cov": "vitest run --coverage",

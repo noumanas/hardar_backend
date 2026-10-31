@@ -19,6 +19,7 @@ import { SIGNATURE_HEADER } from '../../src/modules/whatsapp-webhook/presentatio
 import { InboundMessageProcessor } from '../../src/modules/whatsapp-webhook/application/inbound-message.processor.js';
 import { SpeechToText, type TextToSpeech } from '../../src/modules/speech/domain/speech.ports.js';
 import { GeminiTextToSpeech } from '../../src/modules/speech/infrastructure/gemini-text-to-speech.js';
+import { FollowUpSuggester } from '../../src/modules/demo/domain/follow-up-suggester.port.js';
 import { ReplyTranslator } from '../../src/modules/demo/domain/reply-translator.port.js';
 import { DEMO_LIMITS, type DemoLimits } from '../../src/modules/demo/domain/demo-limits.js';
 import { TEST_ENV } from './test-config.js';
@@ -60,6 +61,8 @@ export interface TestAppOptions {
   voice?: TextToSpeech;
   /** English translations on the demo; by default a fixed sentence, so no test calls Google. */
   translator?: ReplyTranslator;
+  /** Follow-up chips on the demo; by default two fixed questions, so no test calls Google. */
+  followUps?: FollowUpSuggester;
   /** Demo rate limits; by default high enough that only tests about limits ever hit them. */
   demoLimits?: DemoLimits;
 }
@@ -99,6 +102,8 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     .useValue(options.voice ?? { synthesize: () => Promise.resolve({ data: TEST_WAV, mimeType: 'audio/wav' }) })
     .overrideProvider(ReplyTranslator)
     .useValue(options.translator ?? { toEnglish: () => Promise.resolve('(English translation)') })
+    .overrideProvider(FollowUpSuggester)
+    .useValue(options.followUps ?? { suggest: () => Promise.resolve(['What else?', 'How do I complain?']) })
     .overrideProvider(DEMO_LIMITS)
     .useValue(options.demoLimits ?? GENEROUS_DEMO_LIMITS);
 

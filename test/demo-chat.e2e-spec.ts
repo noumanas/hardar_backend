@@ -54,6 +54,7 @@ describe('Public demo chat (e2e)', () => {
       reply: 'You are owed AED 156.25 for 20 extra hours.',
       translation: null,
       citations: expect.arrayContaining([expect.stringMatching(/Art\. 19/)]),
+      suggestions: ['What else?', 'How do I complain?'],
       tools: ['search_labour_law', 'calculate_overtime'],
       urgent: false,
       progress: { caseStep: 'rights_explained', agentStage: 'using_tools' },

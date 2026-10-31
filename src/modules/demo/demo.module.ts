@@ -12,7 +12,9 @@ import { DemoChatService } from './application/demo-chat.service.js';
 import { DemoContractService } from './application/demo-contract.service.js';
 import { DemoService } from './application/demo.service.js';
 import { DEMO_SCENARIOS } from './domain/demo-scenarios.js';
+import { FollowUpSuggester } from './domain/follow-up-suggester.port.js';
 import { ReplyTranslator } from './domain/reply-translator.port.js';
+import { GeminiFollowUpSuggester } from './infrastructure/gemini-follow-up-suggester.js';
 import { GeminiReplyTranslator } from './infrastructure/gemini-reply-translator.js';
 import { AppConfigService } from '../../config/app-config.service.js';
 import { DEFAULT_VISITOR_LIMITS, DEMO_LIMITS, type DemoLimits } from './domain/demo-limits.js';
@@ -39,6 +41,7 @@ import { DemoController } from './presentation/demo.controller.js';
       }),
     },
     { provide: ReplyTranslator, useClass: GeminiReplyTranslator },
+    { provide: FollowUpSuggester, useClass: GeminiFollowUpSuggester },
     {
       provide: DemoService,
       inject: [CalculatorsService, KnowledgeService],

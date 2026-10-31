@@ -10,7 +10,7 @@ import { CalculateOvertimeTool } from './calculate-overtime.tool.js';
 import { GetComplaintGuideTool } from './get-complaint-guide.tool.js';
 import { GetSavedContractTool } from './get-saved-contract.tool.js';
 import { ScheduleFollowUpTool } from './schedule-follow-up.tool.js';
-import { SearchLabourLawTool } from './search-labour-law.tool.js';
+import { ARTICLE_TEXT_LIMIT, SearchLabourLawTool } from './search-labour-law.tool.js';
 
 const context = { workerId: 'worker-1', conversationId: 'conversation-1' };
 
@@ -36,6 +36,13 @@ describe('agent tools', () => {
         },
         citations: ['Decree-Law 33/2021, Art. 13'],
       });
+    });
+
+    it('cuts a very long article so the results stay a reasonable size', async () => {
+      search.mockResolvedValue([{ article: aLawArticle({ body: 'x'.repeat(ARTICLE_TEXT_LIMIT + 500) }), rank: 0.4 }]);
+      const { result } = await tool.execute({ query: 'definitions' });
+      const [article] = (result as { articles: { text: string }[] }).articles;
+      expect(article.text).toBe(`${'x'.repeat(ARTICLE_TEXT_LIMIT)} … [article continues]`);
     });
 
     it('tells the model to send the worker to MOHRE when nothing matches', async () => {

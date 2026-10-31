@@ -168,6 +168,12 @@ export class DemoChatReplyDto {
   })
   translation: string | null;
   @ApiProperty({ type: [String], example: ['Decree-Law 33/2021, Art. 51'] }) citations: string[];
+  @ApiProperty({
+    type: [String],
+    example: ['How is overtime calculated?', 'How do I complain to MOHRE?'],
+    description: "Up to 3 questions the visitor might ask next, in the answer's language",
+  })
+  suggestions: string[];
   @ApiProperty({ type: [String], example: ['search_labour_law', 'calculate_gratuity'] }) tools: string[];
   @ApiProperty({ description: 'The message describes an emergency: show the MOHRE helpline first' }) urgent: boolean;
   @ApiProperty({ type: DemoChatProgressDto }) progress: DemoChatProgressDto;

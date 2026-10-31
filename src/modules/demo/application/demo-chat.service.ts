@@ -16,6 +16,7 @@ import { SpeechToText, type Audio } from '../../speech/domain/speech.ports.js';
 import { GeminiTextToSpeech } from '../../speech/infrastructure/gemini-text-to-speech.js';
 import type { UploadedMedia } from './demo-contract.service.js';
 import { AgentStage, CaseStep } from '../domain/demo-script.js';
+import { FollowUpSuggester } from '../domain/follow-up-suggester.port.js';
 import { needsTranslation, ReplyTranslator } from '../domain/reply-translator.port.js';
 
 /** Turns sent back to the model; older ones are dropped to bound cost per message. */
@@ -49,6 +50,8 @@ export interface DemoChatReply {
   translation: string | null;
   /** Law references the answer relied on, from the real knowledge-base search. */
   citations: string[];
+  /** Questions the visitor might ask next, in the answer's language, shown as tap-to-ask chips. */
+  suggestions: string[];
   /** Names of the tools the agent used, in order, so the site can show what it did. */
   tools: string[];
   /** True when the message describes an emergency; the site shows the MOHRE helpline first. */
@@ -138,6 +141,7 @@ export class DemoChatService {
     private readonly voice: GeminiTextToSpeech,
     private readonly crypto: CryptoService,
     private readonly translator: ReplyTranslator,
+    private readonly followUps: FollowUpSuggester,
   ) {}
 
   /** Records whether an answer helped. Only the rating and the tools used: no text is kept. */
@@ -153,6 +157,16 @@ export class DemoChatService {
     } catch (error) {
       this.logger.warn(`Demo translation failed: ${error instanceof Error ? error.message : String(error)}`);
       return null;
+    }
+  }
+
+  /** Suggestions are a convenience too: if they fail, the answer is shown without them. */
+  private async suggest(question: string, answer: string): Promise<string[]> {
+    try {
+      return await this.followUps.suggest(question, answer);
+    } catch (error) {
+      this.logger.warn(`Demo follow-up suggestions failed: ${error instanceof Error ? error.message : String(error)}`);
+      return [];
     }
   }
 
@@ -205,6 +219,7 @@ export class DemoChatService {
         // Already written in English and Urdu.
         translation: null,
         citations: [],
+        suggestions: [],
         tools: [],
         urgent: false,
         progress: progressFor([]),
@@ -235,10 +250,15 @@ export class DemoChatService {
 
     const tools = run.toolCalls.filter((call) => call.ok).map((call) => call.name);
     const reply = run.text ?? DEMO_FALLBACK_REPLY;
+    // Both are short follow-up calls on the finished answer, so they run side by side.
+    const [translation, suggestions] = run.text
+      ? await Promise.all([this.translate(run.text), this.suggest(text, run.text)])
+      : [null, []];
     return {
       reply,
-      translation: run.text ? await this.translate(run.text) : null,
+      translation,
       citations: run.text ? citedSources(run.text, run.citations) : [],
+      suggestions,
       tools,
       urgent,
       progress: progressFor(tools),

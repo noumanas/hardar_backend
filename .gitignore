@@ -18,3 +18,7 @@ nohup.out
 # Editors and OS
 .DS_Store
 .idea/
+
+# UAE Worker Law Repository snapshots (source PDFs and extracts, ~15 MB). The articles
+# ship with the code in src/database/migrations/data/ via `pnpm laws:export`.
+UAE_Worker_Law_Repository_*/
