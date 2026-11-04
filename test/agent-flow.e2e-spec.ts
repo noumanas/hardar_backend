@@ -1,8 +1,9 @@
 import { FinishReason, type Part } from '@google/genai';
 
 import { seedLawArticles } from '../src/database/seeds/law-articles.seed.js';
+import { LANGUAGE_INSTRUCTIONS } from '../src/modules/agent/domain/replies.js';
 import { AGENT_SYSTEM_PROMPT } from '../src/modules/agent/domain/system-prompt.js';
-import { FOLLOW_UP_TEXT, FollowUpScheduler } from '../src/modules/complaints/application/follow-up.scheduler.js';
+import { FOLLOW_UP_TEXTS, FollowUpScheduler } from '../src/modules/complaints/application/follow-up.scheduler.js';
 import { createTestApp, postWebhook, textFrom, whatsAppWebhook, type TestApp } from './support/test-app.js';
 
 /**
@@ -45,8 +46,9 @@ describe('Agent flow with real tools (e2e)', () => {
       ]),
     );
 
-  it('agrees to consent first', async () => {
+  it('chooses Urdu and agrees to consent first', async () => {
     await send('salam');
+    await send('1');
     await send('ہاں');
     expect(generateContent).not.toHaveBeenCalled();
   });
@@ -71,7 +73,7 @@ describe('Agent flow with real tools (e2e)', () => {
     expect(answer).toBe('آپ کو تقریباً 6758 درہم ملیں گے۔ (Decree-Law 33/2021, Art. 51)');
 
     const firstRequest = generateContent.mock.calls[0][0];
-    expect(firstRequest.config.systemInstruction).toBe(AGENT_SYSTEM_PROMPT);
+    expect(firstRequest.config.systemInstruction).toBe(`${AGENT_SYSTEM_PROMPT}\n\n${LANGUAGE_INSTRUCTIONS.ur}`);
     expect(firstRequest.contents.at(-1)).toEqual({
       role: 'user',
       parts: [{ text: '6 saal kaam kiya, tankhwa 1500, end of service kitna milega?' }],
@@ -139,7 +141,7 @@ describe('Agent flow with real tools (e2e)', () => {
     await expect(scheduler.sendDueFollowUps(new Date())).resolves.toBe(0);
     await expect(scheduler.sendDueFollowUps(new Date(Date.now() + 8 * DAY_MS))).resolves.toBe(1);
 
-    expect(t.channel.texts).toEqual([{ to: PHONE, text: FOLLOW_UP_TEXT }]);
+    expect(t.channel.texts).toEqual([{ to: PHONE, text: FOLLOW_UP_TEXTS.ur }]);
     const [complaintCase] = await t.dataSource.query('SELECT status, follow_up_sent_at FROM complaint_cases');
     expect(complaintCase.status).toBe('follow_up_sent');
     expect(complaintCase.follow_up_sent_at).not.toBeNull();

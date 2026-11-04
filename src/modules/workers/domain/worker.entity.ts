@@ -1,6 +1,7 @@
 import { Column, Entity, Index } from 'typeorm';
 
 import { BaseEntity } from '../../../database/base.entity.js';
+import type { Language } from './language.js';
 
 export enum ConsentStatus {
   /** Greeting and consent request sent; no answer yet. */
@@ -22,8 +23,9 @@ export class Worker extends BaseEntity {
   @Column({ type: 'text' })
   phoneEncrypted: string;
 
-  @Column({ type: 'varchar', length: 8, default: 'ur' })
-  language: string;
+  /** Chosen from the language menu on first contact; `null` until the worker picks one. */
+  @Column({ type: 'varchar', length: 8, nullable: true })
+  language: Language | null;
 
   @Column({ type: 'enum', enum: ConsentStatus, enumName: 'consent_status', default: ConsentStatus.Pending })
   consentStatus: ConsentStatus;

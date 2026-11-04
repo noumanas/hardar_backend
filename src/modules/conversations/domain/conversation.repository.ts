@@ -1,7 +1,7 @@
 import type { IssueType } from '../../complaints/domain/issue-type.enum.js';
 import type { Conversation } from './conversation.entity.js';
 import type { ConversationStatus } from './conversation-status.js';
-import type { Message, MessageKind } from './message.entity.js';
+import type { Message, MessageDirection, MessageKind } from './message.entity.js';
 
 export type NewMessage = Pick<Message, 'conversationId' | 'direction' | 'kind' | 'body'> &
   Partial<Pick<Message, 'externalId' | 'toolCalls' | 'citations' | 'urgent' | 'latencyMs'>>;
@@ -40,6 +40,16 @@ export interface ConversationStats {
   issueTypes: { issueType: IssueType; count: number }[];
 }
 
+/** What one worker has exchanged with Haqdar, across all their conversations. */
+export interface WorkerActivity {
+  workerId: string;
+  conversationCount: number;
+  messageCount: number;
+  inboundCount: number;
+  urgentCount: number;
+  lastMessage: { body: string; direction: MessageDirection; kind: MessageKind; createdAt: Date } | null;
+}
+
 export interface FlaggedMessage {
   id: string;
   conversationId: string;
@@ -71,4 +81,8 @@ export abstract class ConversationRepository {
   ): Promise<{ items: ConversationSummary[]; total: number }>;
   abstract listFlaggedMessages(skip: number, take: number): Promise<{ items: FlaggedMessage[]; total: number }>;
   abstract stats(since: Date): Promise<ConversationStats>;
+  /** One entry per given worker who has stored messages. */
+  abstract activityByWorker(workerIds: string[]): Promise<WorkerActivity[]>;
+  /** The worker's latest `limit` messages across all conversations, oldest first. */
+  abstract listMessagesOfWorker(workerId: string, limit: number): Promise<Message[]>;
 }

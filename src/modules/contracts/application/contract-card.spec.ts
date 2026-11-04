@@ -30,3 +30,18 @@ describe('formatContractCard', () => {
     expect(card).toContain('بنیادی تنخواہ: معلوم نہیں');
   });
 });
+
+describe("formatContractCard in the worker's language", () => {
+  it.each([
+    ['hi', 'मूल वेतन: AED 1,500', 'रोज़ाना काम के घंटे क़ानूनी सीमा से ज़्यादा हैं (Art. 17)'],
+    ['bn', 'মূল বেতন: AED 1,500', 'প্রতিদিনের কাজের ঘণ্টা আইনের সীমার বেশি (Art. 17)'],
+    ['en', 'Basic salary: AED 1,500', 'Daily working hours are above the legal limit (Art. 17)'],
+  ] as const)('writes the card in %s', (language, salaryLine, flagLine) => {
+    const terms = contractTerms({ workingHoursPerDay: 10, workingDaysPerWeek: 4 });
+    const card = formatContractCard(terms, analyzeContract(terms), language);
+
+    expect(card).toContain(salaryLine);
+    expect(card).toContain(flagLine);
+    expect(card).not.toContain('بنیادی تنخواہ');
+  });
+});

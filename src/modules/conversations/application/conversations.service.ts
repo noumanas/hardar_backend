@@ -10,6 +10,7 @@ import {
   type ConversationStats,
   type ConversationSummary,
   type FlaggedMessage,
+  type WorkerActivity,
 } from '../domain/conversation.repository.js';
 import { MessageDirection, MessageKind, type Message, type ToolCallRecord } from '../domain/message.entity.js';
 
@@ -101,6 +102,15 @@ export class ConversationsService {
 
   stats(since: Date): Promise<ConversationStats> {
     return this.repository.stats(since);
+  }
+
+  activityOf(workerIds: string[]): Promise<WorkerActivity[]> {
+    return this.repository.activityByWorker(workerIds);
+  }
+
+  /** A worker's whole chat history across conversations (the latest `limit` messages), oldest first. */
+  messagesOfWorker(workerId: string, limit: number): Promise<Message[]> {
+    return this.repository.listMessagesOfWorker(workerId, limit);
   }
 
   private async addMessage(

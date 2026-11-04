@@ -17,7 +17,7 @@ import {
 } from '../../src/modules/messaging/domain/messaging-channel.port.js';
 import { SIGNATURE_HEADER } from '../../src/modules/whatsapp-webhook/presentation/whatsapp-signature.guard.js';
 import { InboundMessageProcessor } from '../../src/modules/whatsapp-webhook/application/inbound-message.processor.js';
-import { SpeechToText, type TextToSpeech } from '../../src/modules/speech/domain/speech.ports.js';
+import { SpeechToText, TextToSpeech } from '../../src/modules/speech/domain/speech.ports.js';
 import { GeminiTextToSpeech } from '../../src/modules/speech/infrastructure/gemini-text-to-speech.js';
 import { FollowUpSuggester } from '../../src/modules/demo/domain/follow-up-suggester.port.js';
 import { ReplyTranslator } from '../../src/modules/demo/domain/reply-translator.port.js';
@@ -28,13 +28,15 @@ import { TEST_ENV } from './test-config.js';
 export class FakeChannel extends MessagingChannel {
   readonly texts: { to: string; text: string }[] = [];
   readonly templates: { to: string; template: TemplateMessage }[] = [];
+  readonly audios: { to: string; audio: Media }[] = [];
   media: Media = { data: Buffer.from('fake-media'), mimeType: 'image/jpeg' };
 
   sendText(to: string, text: string): Promise<void> {
     this.texts.push({ to, text });
     return Promise.resolve();
   }
-  sendAudio(): Promise<void> {
+  sendAudio(to: string, audio: Media): Promise<void> {
+    this.audios.push({ to, audio });
     return Promise.resolve();
   }
   sendTemplate(to: string, template: TemplateMessage): Promise<void> {
@@ -59,6 +61,8 @@ export interface TestAppOptions {
   speech?: SpeechToText;
   /** Spoken replies for the website demo; by default a tiny fixed WAV, so no test calls Google. */
   voice?: TextToSpeech;
+  /** WhatsApp voice notes; by default a fixed Ogg stand-in, so no test calls Google or ffmpeg. */
+  voiceNotes?: TextToSpeech;
   /** English translations on the demo; by default a fixed sentence, so no test calls Google. */
   translator?: ReplyTranslator;
   /** Follow-up chips on the demo; by default two fixed questions, so no test calls Google. */
@@ -100,6 +104,8 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     .useValue(options.speech ?? { transcribe: () => Promise.resolve(null) })
     .overrideProvider(GeminiTextToSpeech)
     .useValue(options.voice ?? { synthesize: () => Promise.resolve({ data: TEST_WAV, mimeType: 'audio/wav' }) })
+    .overrideProvider(TextToSpeech)
+    .useValue(options.voiceNotes ?? { synthesize: () => Promise.resolve({ data: TEST_OGG, mimeType: 'audio/ogg' }) })
     .overrideProvider(ReplyTranslator)
     .useValue(options.translator ?? { toEnglish: () => Promise.resolve('(English translation)') })
     .overrideProvider(FollowUpSuggester)
@@ -152,6 +158,9 @@ export const TEST_WAV = (() => {
   header.writeUInt32LE(8, 40);
   return Buffer.concat([header, Buffer.alloc(8)]);
 })();
+
+/** Stands in for an Ogg/Opus voice note in tests. */
+export const TEST_OGG = Buffer.from('OggS-test-voice-note');
 
 export const ADMIN_HEADERS = { 'x-api-key': TEST_ENV.ADMIN_API_KEY };
 

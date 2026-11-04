@@ -5,8 +5,9 @@ import { ContractsService } from '../../contracts/application/contracts.service.
 import { MessageKind } from '../../conversations/domain/message.entity.js';
 import { MessagingChannel } from '../../messaging/domain/messaging-channel.port.js';
 import { SpeechToText } from '../../speech/domain/speech.ports.js';
+import type { Language } from '../../workers/domain/language.js';
 import type { InboundMessage } from '../domain/inbound-message.js';
-import { URDU_REPLIES } from '../domain/urdu-replies.js';
+import { REPLIES } from '../domain/replies.js';
 
 /** What the agent should work with, or a fixed reply when there is nothing to work with. */
 export type ResolvedContent =
@@ -35,25 +36,26 @@ export class InboundContentResolver {
     private readonly contracts: ContractsService,
   ) {}
 
-  async resolve(message: InboundMessage, workerId: string): Promise<ResolvedContent> {
+  async resolve(message: InboundMessage, workerId: string, language: Language): Promise<ResolvedContent> {
+    const replies = REPLIES[language];
     switch (message.kind) {
       case 'text':
         return { type: 'prompt', kind: MessageKind.Text, body: message.text, prompt: message.text };
       case 'voice':
-        return this.resolveVoice(message.media.id, message.media.mimeType);
+        return this.resolveVoice(message.media.id, message.media.mimeType, language);
       case 'image':
-        return this.resolveContractPhoto(message.media.id, workerId, message.caption);
+        return this.resolveContractPhoto(message.media.id, workerId, language, message.caption);
       case 'unsupported':
         return {
           type: 'reply',
           kind: MessageKind.Text,
           body: `[Unsupported ${message.type} message]`,
-          reply: URDU_REPLIES.unsupportedMessage,
+          reply: replies.unsupportedMessage,
         };
     }
   }
 
-  private async resolveVoice(mediaId: string, mimeType: string): Promise<ResolvedContent> {
+  private async resolveVoice(mediaId: string, mimeType: string, language: Language): Promise<ResolvedContent> {
     const transcript = await this.channel
       .downloadMedia(mediaId)
       .then((audio) => this.speech.transcribe({ data: audio.data, mimeType: audio.mimeType || mimeType }))
@@ -67,19 +69,24 @@ export class InboundContentResolver {
         type: 'reply',
         kind: MessageKind.Voice,
         body: '[Voice note not understood]',
-        reply: URDU_REPLIES.voiceNotUnderstood,
+        reply: REPLIES[language].voiceNotUnderstood,
       };
     }
     return { type: 'prompt', kind: MessageKind.Voice, body: transcript, prompt: transcript };
   }
 
-  private async resolveContractPhoto(mediaId: string, workerId: string, caption?: string): Promise<ResolvedContent> {
+  private async resolveContractPhoto(
+    mediaId: string,
+    workerId: string,
+    language: Language,
+    caption?: string,
+  ): Promise<ResolvedContent> {
     const body = caption ? `${CONTRACT_PHOTO_MARKER} ${caption}` : CONTRACT_PHOTO_MARKER;
     const image = await this.channel.downloadMedia(mediaId);
     const reading = await this.contracts.read(workerId, image);
 
     if (!reading.legible) {
-      return { type: 'reply', kind: MessageKind.Image, body, reply: URDU_REPLIES.photoUnclear };
+      return { type: 'reply', kind: MessageKind.Image, body, reply: REPLIES[language].photoUnclear };
     }
 
     const { terms, flags } = reading.summary;
@@ -92,6 +99,12 @@ export class InboundContentResolver {
       .filter(Boolean)
       .join('\n');
 
-    return { type: 'prompt', kind: MessageKind.Image, body, prompt, attachment: formatContractCard(terms, flags) };
+    return {
+      type: 'prompt',
+      kind: MessageKind.Image,
+      body,
+      prompt,
+      attachment: formatContractCard(terms, flags, language),
+    };
   }
 }

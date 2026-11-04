@@ -40,7 +40,8 @@ export class WhatsAppCloudChannel extends MessagingChannel {
     const form = new FormData();
     form.append('messaging_product', 'whatsapp');
     form.append('type', audio.mimeType);
-    form.append('file', new Blob([new Uint8Array(audio.data)], { type: audio.mimeType }), 'reply');
+    const extension = audio.mimeType.split(';')[0].split('/')[1] ?? 'ogg';
+    form.append('file', new Blob([new Uint8Array(audio.data)], { type: audio.mimeType }), `reply.${extension}`);
 
     const { id } = await this.request<{ id: string }>(`/${this.config.phoneNumberId}/media`, {
       method: 'POST',

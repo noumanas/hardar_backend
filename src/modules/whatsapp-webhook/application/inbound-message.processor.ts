@@ -3,11 +3,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AgentOrchestrator } from '../../agent/application/agent-orchestrator.service.js';
 import type { InboundMessage } from '../../agent/domain/inbound-message.js';
 import { MessagingChannel } from '../../messaging/domain/messaging-channel.port.js';
+import { TextToSpeech } from '../../speech/domain/speech.ports.js';
 
 /**
  * Processes webhook messages after the HTTP response has gone back to Meta, which retries
  * any webhook not acknowledged quickly. Messages from one sender run strictly in order;
  * different senders run concurrently.
+ *
+ * Each reply goes out as text first, so the worker can read it at once, then as a voice
+ * note of the same answer.
  *
  * In-process by design for the pilot (100 concurrent users). For more scale or durability
  * across restarts, replace this class with a queue consumer; nothing else changes.
@@ -20,6 +24,7 @@ export class InboundMessageProcessor {
   constructor(
     private readonly orchestrator: AgentOrchestrator,
     private readonly channel: MessagingChannel,
+    private readonly voice: TextToSpeech,
   ) {}
 
   enqueue(messages: InboundMessage[]): void {
@@ -44,12 +49,22 @@ export class InboundMessageProcessor {
       if (!reply) return;
 
       await this.channel.sendText(message.from, reply.text);
-      if (reply.audio) await this.channel.sendAudio(message.from, reply.audio);
+      if (reply.voiceText) await this.sendVoiceNote(message.from, reply.voiceText);
     } catch (error) {
       this.logger.error(
         `Failed to handle message ${message.externalId}`,
         error instanceof Error ? error.stack : String(error),
       );
+    }
+  }
+
+  /** Best effort (PRD: graceful fallback to text): the text has already been sent. */
+  private async sendVoiceNote(to: string, text: string): Promise<void> {
+    try {
+      const audio = await this.voice.synthesize(text);
+      if (audio) await this.channel.sendAudio(to, audio);
+    } catch (error) {
+      this.logger.warn(`Voice note not sent: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

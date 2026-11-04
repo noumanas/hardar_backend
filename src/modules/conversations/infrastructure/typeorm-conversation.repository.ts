@@ -11,6 +11,7 @@ import {
   type ConversationSummary,
   type FlaggedMessage,
   type NewMessage,
+  type WorkerActivity,
 } from '../domain/conversation.repository.js';
 import { Message, MessageDirection, type MessageKind } from '../domain/message.entity.js';
 
@@ -61,6 +62,18 @@ interface SummaryRow {
   reviewed_at: Date | null;
   last_message_at: Date;
   total: string;
+}
+
+interface ActivityRow {
+  worker_id: string;
+  conversation_count: string;
+  message_count: string;
+  inbound_count: string;
+  urgent_count: string;
+  last_body: string | null;
+  last_direction: MessageDirection | null;
+  last_kind: MessageKind | null;
+  last_at: Date | null;
 }
 
 interface QueueCountsRow {
@@ -223,6 +236,54 @@ export class TypeOrmConversationRepository implements ConversationRepository {
       guidedToMohre: Number(counts?.guided ?? 0),
       issueTypes: issueTypes.map((row) => ({ issueType: row.issueType, count: Number(row.count) })),
     };
+  }
+
+  async activityByWorker(workerIds: string[]): Promise<WorkerActivity[]> {
+    if (workerIds.length === 0) return [];
+    const rows: ActivityRow[] = await this.conversations.query(
+      `SELECT
+        c.worker_id,
+        COUNT(DISTINCT c.id) AS conversation_count,
+        COUNT(m.id) AS message_count,
+        COUNT(m.id) FILTER (WHERE m.direction = 'inbound') AS inbound_count,
+        COUNT(m.id) FILTER (WHERE m.urgent) AS urgent_count,
+        (array_agg(m.body ORDER BY m.created_at DESC) FILTER (WHERE m.id IS NOT NULL))[1] AS last_body,
+        (array_agg(m.direction::text ORDER BY m.created_at DESC) FILTER (WHERE m.id IS NOT NULL))[1] AS last_direction,
+        (array_agg(m.kind::text ORDER BY m.created_at DESC) FILTER (WHERE m.id IS NOT NULL))[1] AS last_kind,
+        MAX(m.created_at) AS last_at
+      FROM conversations c
+      LEFT JOIN messages m ON m.conversation_id = c.id
+      WHERE c.worker_id = ANY($1::uuid[])
+      GROUP BY c.worker_id`,
+      [workerIds],
+    );
+    return rows.map((row) => ({
+      workerId: row.worker_id,
+      conversationCount: Number(row.conversation_count),
+      messageCount: Number(row.message_count),
+      inboundCount: Number(row.inbound_count),
+      urgentCount: Number(row.urgent_count),
+      lastMessage:
+        row.last_body !== null && row.last_direction && row.last_kind && row.last_at
+          ? {
+              body: row.last_body,
+              direction: row.last_direction,
+              kind: row.last_kind,
+              createdAt: new Date(row.last_at),
+            }
+          : null,
+    }));
+  }
+
+  async listMessagesOfWorker(workerId: string, limit: number): Promise<Message[]> {
+    const latest = await this.messages
+      .createQueryBuilder('m')
+      .innerJoin('m.conversation', 'c')
+      .where('c.workerId = :workerId', { workerId })
+      .orderBy('m.createdAt', 'DESC')
+      .limit(limit)
+      .getMany();
+    return latest.reverse();
   }
 
   /** Total when the requested page is past the end (the window count needs at least one row). */

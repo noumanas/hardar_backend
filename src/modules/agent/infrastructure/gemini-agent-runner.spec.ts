@@ -8,6 +8,7 @@ import { IssueType } from '../../complaints/domain/issue-type.enum.js';
 import { LlmUnavailableError } from '../../llm/llm.constants.js';
 import { LlmSettings } from '../../llm/llm-settings.js';
 import type { AgentTool } from '../domain/agent-tool.js';
+import { LANGUAGE_INSTRUCTIONS } from '../domain/replies.js';
 import { AGENT_SYSTEM_PROMPT } from '../domain/system-prompt.js';
 import { GeminiAgentRunner, toContents } from './gemini-agent-runner.js';
 
@@ -68,6 +69,17 @@ describe('GeminiAgentRunner', () => {
     await runner.run(input);
 
     expect(generateContent.mock.calls[0][0].config.systemInstruction).toBe('Demo instructions');
+  });
+
+  it("tells the model to write in the worker's chosen language", async () => {
+    const { generateContent, runner } = setup();
+    generateContent.mockResolvedValueOnce(modelTurn(text('ok')));
+
+    await runner.run({ ...input, language: 'hi' });
+
+    expect(generateContent.mock.calls[0][0].config.systemInstruction).toBe(
+      `${AGENT_SYSTEM_PROMPT}\n\n${LANGUAGE_INSTRUCTIONS.hi}`,
+    );
   });
 
   beforeEach(() => vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined));

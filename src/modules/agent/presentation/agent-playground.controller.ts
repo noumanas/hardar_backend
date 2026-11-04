@@ -48,6 +48,6 @@ export class AgentPlaygroundController {
       text: body.text,
       externalId: `playground-${randomUUID()}`,
     });
-    return { reply: reply?.text ?? null, hasAudio: Boolean(reply?.audio) };
+    return { reply: reply?.text ?? null, hasAudio: Boolean(reply?.voiceText) };
   }
 }

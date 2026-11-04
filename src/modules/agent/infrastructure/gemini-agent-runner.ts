@@ -23,6 +23,7 @@ import {
   type ConversationTurn,
 } from '../domain/agent-runner.port.js';
 import { AGENT_INSTRUCTIONS, AGENT_TOOLS, type AgentContext, type AgentTool } from '../domain/agent-tool.js';
+import { LANGUAGE_INSTRUCTIONS } from '../domain/replies.js';
 import { AGENT_SYSTEM_PROMPT } from '../domain/system-prompt.js';
 
 /** Replies are short voice-note scripts; this leaves ample room for thinking tokens. */
@@ -50,7 +51,7 @@ class TurnLog {
 
 /**
  * The agent loop on the Gemini API (manual function calling): the model reasons, calls
- * Haqdar's tools, sees their results and writes the Urdu reply. Conversation history lives
+ * Haqdar's tools, sees their results and writes the reply in the worker's language. Conversation history lives
  * in Postgres, so each request is stateless.
  */
 @Injectable()
@@ -82,10 +83,14 @@ export class GeminiAgentRunner implements AgentRunner {
     if (!client || !this.settings.enabled) throw new LlmUnavailableError('The agent');
 
     const log = new TurnLog();
+    // One fixed instruction text per language, so each one's prompt prefix is still cached.
+    const instructions = input.language
+      ? `${this.systemPrompt}\n\n${LANGUAGE_INSTRUCTIONS[input.language]}`
+      : this.systemPrompt;
     const contents: Content[] = [...toContents(input.history), { role: 'user', parts: [{ text: input.message }] }];
 
     for (let round = 0; round < this.settings.maxToolRounds; round += 1) {
-      const response = await this.generate(client, contents);
+      const response = await this.generate(client, instructions, contents);
       const modelTurn = response.candidates?.[0]?.content;
       if (isBlocked(response) || !modelTurn) return log.result(null);
 
@@ -105,13 +110,14 @@ export class GeminiAgentRunner implements AgentRunner {
 
     // Out of tool rounds: ask for a final answer from what the tools have returned so far.
     this.logger.warn(`Agent hit ${this.settings.maxToolRounds} tool rounds; forcing a final answer`);
-    const final = await this.generate(client, contents, FunctionCallingConfigMode.NONE);
+    const final = await this.generate(client, instructions, contents, FunctionCallingConfigMode.NONE);
     const finalTurn = final.candidates?.[0]?.content;
     return log.result(isBlocked(final) || !finalTurn ? null : textOf(finalTurn));
   }
 
   private generate(
     client: GoogleGenAI,
+    systemInstruction: string,
     contents: Content[],
     mode: FunctionCallingConfigMode = FunctionCallingConfigMode.AUTO,
   ): Promise<GenerateContentResponse> {
@@ -120,7 +126,7 @@ export class GeminiAgentRunner implements AgentRunner {
       // A snapshot: the loop keeps appending to its own array after this request is sent.
       contents: [...contents],
       config: {
-        systemInstruction: this.systemPrompt,
+        systemInstruction,
         tools: [{ functionDeclarations: this.declarations }],
         toolConfig: { functionCallingConfig: { mode } },
         // Gemini 3: depth is set by thinking level; temperature stays at its default.

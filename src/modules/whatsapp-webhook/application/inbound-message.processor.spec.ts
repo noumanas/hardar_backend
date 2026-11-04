@@ -3,7 +3,10 @@ import { Logger } from '@nestjs/common';
 import type { AgentOrchestrator } from '../../agent/application/agent-orchestrator.service.js';
 import type { InboundMessage } from '../../agent/domain/inbound-message.js';
 import type { MessagingChannel } from '../../messaging/domain/messaging-channel.port.js';
+import type { TextToSpeech } from '../../speech/domain/speech.ports.js';
 import { InboundMessageProcessor } from './inbound-message.processor.js';
+
+const audio = { data: Buffer.from('OggS'), mimeType: 'audio/ogg' };
 
 const text = (from: string, id: string): InboundMessage => ({ kind: 'text', from, externalId: id, text: id });
 
@@ -15,21 +18,60 @@ function setup() {
     sendTemplate: vi.fn(),
     downloadMedia: vi.fn(),
   } satisfies MessagingChannel;
-  const processor = new InboundMessageProcessor(orchestrator as unknown as AgentOrchestrator, channel);
-  return { orchestrator, channel, processor };
+  const voice = { synthesize: vi.fn().mockResolvedValue(audio) } satisfies TextToSpeech;
+  const processor = new InboundMessageProcessor(orchestrator as unknown as AgentOrchestrator, channel, voice);
+  return { orchestrator, channel, voice, processor };
 }
 
 describe('InboundMessageProcessor', () => {
-  it('sends the text reply, then the voice version when there is one', async () => {
-    const { orchestrator, channel, processor } = setup();
-    const audio = { data: Buffer.from('ogg'), mimeType: 'audio/ogg' };
-    orchestrator.handle.mockResolvedValue({ text: 'جواب', audio });
+  it('sends the text reply first, then a voice note of the spoken part', async () => {
+    const { orchestrator, channel, voice, processor } = setup();
+    const order: string[] = [];
+    channel.sendText.mockImplementation(async () => void order.push('text'));
+    channel.sendAudio.mockImplementation(async () => void order.push('voice'));
+    orchestrator.handle.mockResolvedValue({ text: 'جواب\n\nکارڈ', voiceText: 'جواب' });
+
+    processor.enqueue([text('971501', 'wamid.1')]);
+    await processor.drain();
+
+    expect(channel.sendText).toHaveBeenCalledWith('971501', 'جواب\n\nکارڈ');
+    expect(voice.synthesize).toHaveBeenCalledWith('جواب');
+    expect(channel.sendAudio).toHaveBeenCalledWith('971501', audio);
+    expect(order).toEqual(['text', 'voice']);
+  });
+
+  it('sends text only when the reply is not to be spoken', async () => {
+    const { orchestrator, channel, voice, processor } = setup();
+    orchestrator.handle.mockResolvedValue({ text: 'menu', voiceText: null });
+
+    processor.enqueue([text('971501', 'wamid.1')]);
+    await processor.drain();
+
+    expect(channel.sendText).toHaveBeenCalledWith('971501', 'menu');
+    expect(voice.synthesize).not.toHaveBeenCalled();
+    expect(channel.sendAudio).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'speech fails',
+      (voice: { synthesize: ReturnType<typeof vi.fn> }) => voice.synthesize.mockRejectedValue(new Error('TTS down')),
+    ],
+    [
+      'there is no speech',
+      (voice: { synthesize: ReturnType<typeof vi.fn> }) => voice.synthesize.mockResolvedValue(null),
+    ],
+  ])('still delivers the text when %s', async (_case, arrange) => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const { orchestrator, channel, voice, processor } = setup();
+    arrange(voice);
+    orchestrator.handle.mockResolvedValue({ text: 'جواب', voiceText: 'جواب' });
 
     processor.enqueue([text('971501', 'wamid.1')]);
     await processor.drain();
 
     expect(channel.sendText).toHaveBeenCalledWith('971501', 'جواب');
-    expect(channel.sendAudio).toHaveBeenCalledWith('971501', audio);
+    expect(channel.sendAudio).not.toHaveBeenCalled();
   });
 
   it('sends nothing for a duplicate delivery', async () => {
@@ -61,7 +103,7 @@ describe('InboundMessageProcessor', () => {
   it('keeps going after a failure and logs it', async () => {
     const error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     const { orchestrator, channel, processor } = setup();
-    orchestrator.handle.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce({ text: 'ok' });
+    orchestrator.handle.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce({ text: 'ok', voiceText: null });
 
     processor.enqueue([text('971501', 'bad'), text('971501', 'good')]);
     await processor.drain();

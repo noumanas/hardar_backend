@@ -13,6 +13,9 @@ function setup() {
     save: vi.fn(async (worker: Worker) => worker),
     delete: vi.fn(),
     countByConsent: vi.fn(),
+    list: vi.fn(),
+    countActiveSince: vi.fn(),
+    countByLanguage: vi.fn(),
   } satisfies WorkerRepository;
   const crypto = new CryptoService(testConfig());
   return { repository, crypto, service: new WorkersService(repository, crypto) };
@@ -70,5 +73,45 @@ describe('WorkersService', () => {
 
     await expect(service.findById('worker-1')).resolves.toMatchObject({ id: 'worker-1' });
     await expect(service.consentCounts()).resolves.toEqual({ pending: 1, granted: 2, declined: 0 });
+  });
+
+  describe('for the admin WhatsApp page', () => {
+    it("masks a worker's number and finds a worker by their full number through its hash", async () => {
+      const { repository, crypto, service } = setup();
+      const worker = aWorker({ phoneEncrypted: crypto.encrypt('971501234567') });
+      repository.findByPhoneHash.mockResolvedValue(worker);
+
+      expect(service.maskedPhoneOf(worker)).toBe('+971 ••• 4567');
+      await expect(service.findByPhone('971501234567')).resolves.toBe(worker);
+      expect(repository.findByPhoneHash).toHaveBeenCalledWith(crypto.hash('971501234567'));
+    });
+
+    it('pages workers and passes through activity and language counts', async () => {
+      const { repository, service } = setup();
+      repository.list.mockResolvedValue({ items: [aWorker()], total: 41 });
+      repository.countActiveSince.mockResolvedValue(5);
+      repository.countByLanguage.mockResolvedValue({ ur: 3, unset: 1 });
+      const since = new Date('2026-10-01');
+
+      await expect(service.list(3, 20)).resolves.toEqual({
+        items: [expect.objectContaining({ id: 'worker-1' })],
+        meta: { page: 3, limit: 20, total: 41, totalPages: 3 },
+      });
+      expect(repository.list).toHaveBeenCalledWith(40, 20);
+      await expect(service.countActiveSince(since)).resolves.toBe(5);
+      expect(repository.countActiveSince).toHaveBeenCalledWith(since);
+      await expect(service.languageCounts()).resolves.toEqual({ ur: 3, unset: 1 });
+    });
+
+    it('saves or clears the language', async () => {
+      const { repository, service } = setup();
+      const worker = aWorker();
+
+      await service.setLanguage(worker, 'bn');
+      expect(worker.language).toBe('bn');
+      await service.setLanguage(worker, null);
+      expect(worker.language).toBeNull();
+      expect(repository.save).toHaveBeenCalledTimes(2);
+    });
   });
 });

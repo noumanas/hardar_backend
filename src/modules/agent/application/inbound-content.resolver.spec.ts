@@ -6,7 +6,7 @@ import { analyzeContract } from '../../contracts/domain/contract-analyzer.js';
 import { MessageKind } from '../../conversations/domain/message.entity.js';
 import type { MessagingChannel } from '../../messaging/domain/messaging-channel.port.js';
 import type { SpeechToText } from '../../speech/domain/speech.ports.js';
-import { URDU_REPLIES } from '../domain/urdu-replies.js';
+import { REPLIES } from '../domain/replies.js';
 import { CONTRACT_PHOTO_MARKER, InboundContentResolver } from './inbound-content.resolver.js';
 
 function setup() {
@@ -32,7 +32,7 @@ describe('InboundContentResolver', () => {
   it('passes text straight to the agent', async () => {
     const { resolver } = setup();
 
-    await expect(resolver.resolve({ ...base, kind: 'text', text: 'سوال' }, 'w')).resolves.toEqual({
+    await expect(resolver.resolve({ ...base, kind: 'text', text: 'سوال' }, 'w', 'ur')).resolves.toEqual({
       type: 'prompt',
       kind: MessageKind.Text,
       body: 'سوال',
@@ -48,7 +48,7 @@ describe('InboundContentResolver', () => {
       channel.downloadMedia.mockResolvedValue(audio);
       speech.transcribe.mockResolvedValue('میری تنخواہ نہیں آئی');
 
-      await expect(resolver.resolve(voice, 'w')).resolves.toMatchObject({
+      await expect(resolver.resolve(voice, 'w', 'ur')).resolves.toMatchObject({
         type: 'prompt',
         kind: MessageKind.Voice,
         prompt: 'میری تنخواہ نہیں آئی',
@@ -61,7 +61,7 @@ describe('InboundContentResolver', () => {
       channel.downloadMedia.mockResolvedValue({ data: audio.data, mimeType: '' });
       speech.transcribe.mockResolvedValue('ok');
 
-      await resolver.resolve(voice, 'w');
+      await resolver.resolve(voice, 'w', 'ur');
 
       expect(speech.transcribe).toHaveBeenCalledWith({ data: audio.data, mimeType: 'audio/ogg' });
     });
@@ -75,11 +75,11 @@ describe('InboundContentResolver', () => {
       channel.downloadMedia.mockResolvedValue(audio);
       speech.transcribe.mockImplementation(transcribe);
 
-      await expect(resolver.resolve(voice, 'w')).resolves.toEqual({
+      await expect(resolver.resolve(voice, 'w', 'ur')).resolves.toEqual({
         type: 'reply',
         kind: MessageKind.Voice,
         body: '[Voice note not understood]',
-        reply: URDU_REPLIES.voiceNotUnderstood,
+        reply: REPLIES.ur.voiceNotUnderstood,
       });
     });
   });
@@ -96,7 +96,7 @@ describe('InboundContentResolver', () => {
         summary: aContractSummary({ terms, flags: analyzeContract(terms) }),
       });
 
-      const resolved = await resolver.resolve({ ...photo, caption: 'is this ok?' }, 'worker-1');
+      const resolved = await resolver.resolve({ ...photo, caption: 'is this ok?' }, 'worker-1', 'ur');
 
       expect(contracts.read).toHaveBeenCalledWith('worker-1', image);
       expect(resolved).toMatchObject({
@@ -116,7 +116,7 @@ describe('InboundContentResolver', () => {
       channel.downloadMedia.mockResolvedValue(image);
       contracts.read.mockResolvedValue({ legible: true, summary: aContractSummary() });
 
-      const resolved = await resolver.resolve(photo, 'worker-1');
+      const resolved = await resolver.resolve(photo, 'worker-1', 'ur');
 
       expect(resolved).toMatchObject({ body: CONTRACT_PHOTO_MARKER });
       expect(resolved.type === 'prompt' && resolved.prompt).toContain("Problems found by Haqdar's checker: none");
@@ -127,9 +127,9 @@ describe('InboundContentResolver', () => {
       channel.downloadMedia.mockResolvedValue(image);
       contracts.read.mockResolvedValue({ legible: false });
 
-      await expect(resolver.resolve(photo, 'worker-1')).resolves.toMatchObject({
+      await expect(resolver.resolve(photo, 'worker-1', 'ur')).resolves.toMatchObject({
         type: 'reply',
-        reply: URDU_REPLIES.photoUnclear,
+        reply: REPLIES.ur.photoUnclear,
       });
     });
   });
@@ -137,11 +137,19 @@ describe('InboundContentResolver', () => {
   it('explains which message types are supported', async () => {
     const { resolver } = setup();
 
-    await expect(resolver.resolve({ ...base, kind: 'unsupported', type: 'location' }, 'w')).resolves.toEqual({
+    await expect(resolver.resolve({ ...base, kind: 'unsupported', type: 'location' }, 'w', 'ur')).resolves.toEqual({
       type: 'reply',
       kind: MessageKind.Text,
       body: '[Unsupported location message]',
-      reply: URDU_REPLIES.unsupportedMessage,
+      reply: REPLIES.ur.unsupportedMessage,
     });
+  });
+
+  it("answers in the worker's language", async () => {
+    const { resolver } = setup();
+
+    await expect(
+      resolver.resolve({ ...base, kind: 'unsupported', type: 'location' }, 'w', 'bn'),
+    ).resolves.toMatchObject({ reply: REPLIES.bn.unsupportedMessage });
   });
 });

@@ -2,12 +2,13 @@ import { Module, type OnApplicationShutdown } from '@nestjs/common';
 
 import { AgentModule } from '../agent/agent.module.js';
 import { MessagingModule } from '../messaging/messaging.module.js';
+import { SpeechModule } from '../speech/speech.module.js';
 import { InboundMessageProcessor } from './application/inbound-message.processor.js';
 import { WhatsAppSignatureGuard } from './presentation/whatsapp-signature.guard.js';
 import { WhatsAppWebhookController } from './presentation/whatsapp-webhook.controller.js';
 
 @Module({
-  imports: [AgentModule, MessagingModule],
+  imports: [AgentModule, MessagingModule, SpeechModule],
   controllers: [WhatsAppWebhookController],
   providers: [InboundMessageProcessor, WhatsAppSignatureGuard],
   exports: [InboundMessageProcessor],

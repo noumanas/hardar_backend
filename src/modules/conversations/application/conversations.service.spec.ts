@@ -25,6 +25,8 @@ function setup() {
     listSummaries: vi.fn(),
     listFlaggedMessages: vi.fn(),
     stats: vi.fn(),
+    activityByWorker: vi.fn(),
+    listMessagesOfWorker: vi.fn(),
   } satisfies ConversationRepository;
   return { repository, service: new ConversationsService(repository) };
 }
@@ -186,5 +188,15 @@ describe('ConversationsService', () => {
 
     expect(repository.recentMessages).toHaveBeenCalledWith('conversation-1', 12);
     expect(repository.stats).toHaveBeenCalledWith(new Date(0));
+  });
+
+  it("passes through a worker's activity and whole chat history", async () => {
+    const { repository, service } = setup();
+    repository.activityByWorker.mockResolvedValue([{ workerId: 'w-1', messageCount: 2 }]);
+    repository.listMessagesOfWorker.mockResolvedValue([aMessage()]);
+
+    await expect(service.activityOf(['w-1'])).resolves.toEqual([{ workerId: 'w-1', messageCount: 2 }]);
+    await expect(service.messagesOfWorker('w-1', 200)).resolves.toHaveLength(1);
+    expect(repository.listMessagesOfWorker).toHaveBeenCalledWith('w-1', 200);
   });
 });

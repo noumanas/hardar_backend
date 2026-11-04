@@ -15,6 +15,16 @@ describe('UrgentCaseDetector', () => {
     ['violence (Urdu)', 'سپروائزر نے مجھے مارا', UrgentCategory.Violence],
     ['confinement', 'We are locked in the room', UrgentCategory.Confinement],
     ['confinement (Urdu)', 'ہمیں کمرے میں بند کر دیا', UrgentCategory.Confinement],
+    ['Hindi passport', 'कंपनी ने मेरा पासपोर्ट रख लिया है', UrgentCategory.PassportHeld],
+    ['no food (Hindi)', 'दो दिन से खाना नहीं मिला', UrgentCategory.NoFoodOrHousing],
+    ['injury (Hindi)', 'मेरा दोस्त काम पर घायल हो गया', UrgentCategory.UnsafeWork],
+    ['violence (Hindi)', 'सुपरवाइज़र ने मुझे मारा', UrgentCategory.Violence],
+    ['confinement (Hindi)', 'हमें कमरे में बंद कर दिया', UrgentCategory.Confinement],
+    ['Bengali passport', 'কোম্পানি আমার পাসপোর্ট রেখে দিয়েছে', UrgentCategory.PassportHeld],
+    ['no food (Bengali)', 'দুই দিন ধরে খাবার নেই', UrgentCategory.NoFoodOrHousing],
+    ['injury (Bengali)', 'আমার বন্ধু কাজে আহত হয়েছে', UrgentCategory.UnsafeWork],
+    ['violence (Bengali)', 'সুপারভাইজার আমাকে মারধর করেছে', UrgentCategory.Violence],
+    ['confinement (Bengali)', 'আমাদের ঘরে আটকে রেখেছে', UrgentCategory.Confinement],
   ])('spots %s', (_case, text, category) => {
     expect(detector.assess(text)).toEqual({ urgent: true, categories: [category] });
   });
@@ -26,10 +36,12 @@ describe('UrgentCaseDetector', () => {
     ]);
   });
 
-  it.each(['How much end-of-service money will I get?', 'میری تنخواہ دو مہینے سے نہیں آئی'])(
-    'does not raise an alarm for an ordinary question: %s',
-    (text) => {
-      expect(detector.assess(text)).toEqual({ urgent: false, categories: [] });
-    },
-  );
+  it.each([
+    'How much end-of-service money will I get?',
+    'میری تنخواہ دو مہینے سے نہیں آئی',
+    'हमारा वेतन दो महीने से नहीं आया',
+    'আমার বেতন দুই মাস ধরে আসেনি',
+  ])('does not raise an alarm for an ordinary question: %s', (text) => {
+    expect(detector.assess(text)).toEqual({ urgent: false, categories: [] });
+  });
 });

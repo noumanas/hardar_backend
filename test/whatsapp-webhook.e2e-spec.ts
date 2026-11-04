@@ -1,4 +1,4 @@
-import { URDU_REPLIES } from '../src/modules/agent/domain/urdu-replies.js';
+import { LANGUAGE_MENU, REPLIES } from '../src/modules/agent/domain/replies.js';
 import type { AgentRunner } from '../src/modules/agent/domain/agent-runner.port.js';
 import type { ContractExtractor } from '../src/modules/contracts/domain/contract-extractor.port.js';
 import { IssueType } from '../src/modules/complaints/domain/issue-type.enum.js';
@@ -38,6 +38,7 @@ describe('WhatsApp webhook (e2e)', () => {
   beforeEach(async () => {
     await resetDatabase(t.dataSource);
     t.channel.texts.length = 0;
+    t.channel.audios.length = 0;
     runner.run.mockClear();
   });
 
@@ -93,17 +94,30 @@ describe('WhatsApp webhook (e2e)', () => {
     });
   });
 
-  it('runs the full first-contact flow: consent, menu, then an agent answer', async () => {
-    expect(await send(textFrom(PHONE, 'salam'))).toBe(URDU_REPLIES.greetingAndConsent);
+  /** First contact up to the menu: language menu, choice, consent. */
+  async function onboard(phone = PHONE, choice = '1') {
+    await send(textFrom(phone, 'salam'));
+    await send(textFrom(phone, choice));
+    await send(textFrom(phone, choice === '4' ? 'yes' : 'ہاں'));
+  }
+
+  it('runs the full first-contact flow: language, consent, menu, then an agent answer', async () => {
+    expect(await send(textFrom(PHONE, 'salam'))).toBe(LANGUAGE_MENU);
+    expect(t.channel.audios).toEqual([]); // the four-language menu is text only
+
+    expect(await send(textFrom(PHONE, '1'))).toBe(REPLIES.ur.greetingAndConsent);
     expect(await count('messages')).toBe(0); // nothing stored before consent
 
-    expect(await send(textFrom(PHONE, 'ہاں'))).toBe(URDU_REPLIES.menu);
+    expect(await send(textFrom(PHONE, 'ہاں'))).toBe(REPLIES.ur.menu);
 
     const answer = await send(textFrom(PHONE, 'کیا کمپنی میرا پاسپورٹ رکھ سکتی ہے؟'));
-    expect(answer).toBe(`${URDU_REPLIES.urgentNotice}\n\nآپ کی کمپنی پاسپورٹ نہیں رکھ سکتی۔`);
+    expect(answer).toBe(`${REPLIES.ur.urgentNotice}\n\nآپ کی کمپنی پاسپورٹ نہیں رکھ سکتی۔`);
+    expect(runner.run).toHaveBeenCalledWith(expect.objectContaining({ language: 'ur' }));
 
-    const [worker] = await t.dataSource.query('SELECT phone_hash, phone_encrypted, consent_status FROM workers');
-    expect(worker.consent_status).toBe('granted');
+    const [worker] = await t.dataSource.query(
+      'SELECT phone_hash, phone_encrypted, consent_status, language FROM workers',
+    );
+    expect(worker).toMatchObject({ consent_status: 'granted', language: 'ur' });
     expect(JSON.stringify(worker)).not.toContain(PHONE); // the number is never stored in clear
 
     const messages = await t.dataSource.query('SELECT direction, urgent, citations FROM messages ORDER BY created_at');
@@ -116,8 +130,7 @@ describe('WhatsApp webhook (e2e)', () => {
   });
 
   it('ignores a duplicate delivery of the same message', async () => {
-    await send(textFrom(PHONE, 'salam'));
-    await send(textFrom(PHONE, 'ہاں'));
+    await onboard();
     const question = textFrom(PHONE, 'سوال');
 
     await send(question);
@@ -128,8 +141,7 @@ describe('WhatsApp webhook (e2e)', () => {
   });
 
   it('reads a contract photo and replies with the explanation and the summary card', async () => {
-    await send(textFrom(PHONE, 'salam'));
-    await send(textFrom(PHONE, 'ہاں'));
+    await onboard();
 
     const reply = await send({
       from: PHONE,
@@ -146,8 +158,7 @@ describe('WhatsApp webhook (e2e)', () => {
   });
 
   it('asks the worker to type when no speech-to-text provider is configured', async () => {
-    await send(textFrom(PHONE, 'salam'));
-    await send(textFrom(PHONE, 'ہاں'));
+    await onboard();
 
     const reply = await send({
       from: PHONE,
@@ -156,17 +167,16 @@ describe('WhatsApp webhook (e2e)', () => {
       audio: { id: 'a-1', mime_type: 'audio/ogg' },
     });
 
-    expect(reply).toBe(URDU_REPLIES.voiceNotUnderstood);
+    expect(reply).toBe(REPLIES.ur.voiceNotUnderstood);
     expect(runner.run).not.toHaveBeenCalled();
   });
 
   it('deletes every trace of the worker on the delete command (FR-14)', async () => {
-    await send(textFrom(PHONE, 'salam'));
-    await send(textFrom(PHONE, 'ہاں'));
+    await onboard();
     await send(textFrom(PHONE, 'سوال'));
     expect(await count('messages')).toBeGreaterThan(0);
 
-    expect(await send(textFrom(PHONE, 'ڈیٹا ختم کریں'))).toBe(URDU_REPLIES.dataDeleted);
+    expect(await send(textFrom(PHONE, 'ڈیٹا ختم کریں'))).toBe(REPLIES.ur.dataDeleted);
 
     for (const table of ['workers', 'conversations', 'messages', 'contract_summaries', 'complaint_cases']) {
       expect(await count(table)).toBe(0);
@@ -178,6 +188,61 @@ describe('WhatsApp webhook (e2e)', () => {
     await send(textFrom('971500000002', 'salam'));
 
     expect(await count('workers')).toBe(2);
-    expect(t.channel.lastTextTo('971500000002')).toBe(URDU_REPLIES.greetingAndConsent);
+    expect(t.channel.lastTextTo('971500000002')).toBe(LANGUAGE_MENU);
+  });
+
+  describe('languages and voice notes', () => {
+    it('talks to a worker in the language they chose, in text and as a voice note', async () => {
+      expect(await send(textFrom(PHONE, 'hello'))).toBe(LANGUAGE_MENU);
+      expect(await send(textFrom(PHONE, '4'))).toBe(REPLIES.en.greetingAndConsent);
+      expect(await send(textFrom(PHONE, 'yes'))).toBe(REPLIES.en.menu);
+
+      runner.run.mockResolvedValueOnce({
+        text: 'Your salary must be paid on time.',
+        toolCalls: [],
+        citations: [],
+        issueTypes: [],
+      });
+      expect(await send(textFrom(PHONE, 'My salary is late'))).toBe('Your salary must be paid on time.');
+      expect(runner.run).toHaveBeenCalledWith(expect.objectContaining({ language: 'en' }));
+
+      // Every reply after the language menu also went out as a voice note.
+      expect(t.channel.audios).toHaveLength(3);
+      expect(t.channel.audios.every(({ to, audio }) => to === PHONE && audio.mimeType === 'audio/ogg')).toBe(true);
+    });
+
+    it('lets the worker switch language at any time without asking for consent again', async () => {
+      await onboard(PHONE, '1');
+
+      expect(await send(textFrom(PHONE, 'زبان'))).toBe(LANGUAGE_MENU);
+      expect(await send(textFrom(PHONE, '3'))).toBe(REPLIES.bn.menu);
+
+      const [worker] = await t.dataSource.query('SELECT language, consent_status FROM workers');
+      expect(worker).toEqual({ language: 'bn', consent_status: 'granted' });
+    });
+
+    it('keeps showing the language menu until the worker picks one', async () => {
+      expect(await send(textFrom(PHONE, 'salam'))).toBe(LANGUAGE_MENU);
+      expect(await send(textFrom(PHONE, 'what is this?'))).toBe(LANGUAGE_MENU);
+      expect(runner.run).not.toHaveBeenCalled();
+    });
+
+    it('still sends the text when the voice note fails', async () => {
+      const failing = await createTestApp({
+        runner,
+        extractor,
+        voiceNotes: { synthesize: () => Promise.reject(new Error('TTS down')) },
+      });
+      try {
+        await postWebhook(failing.http, whatsAppWebhook([textFrom(PHONE, 'salam')])).expect(200);
+        await postWebhook(failing.http, whatsAppWebhook([textFrom(PHONE, '2')])).expect(200);
+        await failing.drain();
+
+        expect(failing.channel.lastTextTo(PHONE)).toBe(REPLIES.hi.greetingAndConsent);
+        expect(failing.channel.audios).toEqual([]);
+      } finally {
+        await failing.close();
+      }
+    });
   });
 });

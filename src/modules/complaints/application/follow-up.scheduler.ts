@@ -4,11 +4,17 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { AppConfigService } from '../../../config/app-config.service.js';
 import { MessagingChannel } from '../../messaging/domain/messaging-channel.port.js';
 import { WorkersService } from '../../workers/application/workers.service.js';
+import { languageOf, type Language } from '../../workers/domain/language.js';
 import { CaseStatus, type ComplaintCase } from '../domain/complaint-case.entity.js';
 import { ComplaintCaseRepository } from '../domain/complaint-case.repository.js';
 
-export const FOLLOW_UP_TEXT =
-  'السلام علیکم! حقدار کی طرف سے یاد دہانی: کیا آپ نے MOHRE میں شکایت درج کر دی ہے اور شکایت نمبر محفوظ کر لیا ہے؟ مدد چاہیے تو یہاں جواب دیں۔';
+/** The check-in, in the worker's language, when it can still be sent as plain text. */
+export const FOLLOW_UP_TEXTS: Record<Language, string> = {
+  ur: 'السلام علیکم! حقدار کی طرف سے یاد دہانی: کیا آپ نے MOHRE میں شکایت درج کر دی ہے اور شکایت نمبر محفوظ کر لیا ہے؟ مدد چاہیے تو یہاں جواب دیں۔',
+  hi: 'नमस्ते! हक़दार की तरफ़ से याद दिलाना: क्या आपने MOHRE में शिकायत दर्ज कर दी है और शिकायत नंबर संभाल कर रखा है? मदद चाहिए तो यहाँ जवाब दें।',
+  bn: 'আসসালামু আলাইকুম! হকদারের পক্ষ থেকে মনে করিয়ে দেওয়া: আপনি কি MOHRE-তে অভিযোগ করেছেন এবং অভিযোগ নম্বরটি রেখে দিয়েছেন? সাহায্য লাগলে এখানে উত্তর দিন।',
+  en: 'Hello! A reminder from Haqdar: have you made your complaint to MOHRE and kept the complaint number? Reply here if you need help.',
+};
 
 const BATCH_SIZE = 50;
 
@@ -50,7 +56,7 @@ export class FollowUpScheduler {
         return false;
       }
 
-      await this.deliver(this.workers.phoneOf(worker));
+      await this.deliver(this.workers.phoneOf(worker), languageOf(worker));
       complaintCase.status = CaseStatus.FollowUpSent;
       complaintCase.followUpSentAt = now;
       await this.cases.save(complaintCase);
@@ -66,10 +72,10 @@ export class FollowUpScheduler {
    * Follow-ups arrive days later, outside WhatsApp's 24-hour reply window, so a
    * pre-approved template is used when configured; plain text only works inside the window.
    */
-  private deliver(phone: string): Promise<void> {
+  private deliver(phone: string, language: Language): Promise<void> {
     const template = this.config.get('WHATSAPP_FOLLOW_UP_TEMPLATE');
     return template
       ? this.channel.sendTemplate(phone, { name: template, language: this.config.get('WHATSAPP_TEMPLATE_LANGUAGE') })
-      : this.channel.sendText(phone, FOLLOW_UP_TEXT);
+      : this.channel.sendText(phone, FOLLOW_UP_TEXTS[language]);
   }
 }

@@ -1,5 +1,6 @@
 import type { IssueType } from '../../complaints/domain/issue-type.enum.js';
 import type { ToolCallRecord } from '../../conversations/domain/message.entity.js';
+import type { Language } from '../../workers/domain/language.js';
 import type { AgentContext } from './agent-tool.js';
 
 export interface ConversationTurn {
@@ -11,10 +12,12 @@ export interface AgentRunInput {
   history: ConversationTurn[];
   message: string;
   context: AgentContext;
+  /** The language the worker chose on WhatsApp. Omitted on the website, which answers in the visitor's language. */
+  language?: Language;
 }
 
 export interface AgentRunResult {
-  /** The reply in Urdu, or `null` when the model produced none (e.g. it declined). */
+  /** The reply in the worker's language, or `null` when the model produced none (e.g. it declined). */
   text: string | null;
   toolCalls: ToolCallRecord[];
   citations: string[];

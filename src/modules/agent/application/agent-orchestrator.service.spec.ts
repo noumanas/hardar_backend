@@ -6,11 +6,10 @@ import { IssueType } from '../../complaints/domain/issue-type.enum.js';
 import type { ConversationsService } from '../../conversations/application/conversations.service.js';
 import { MessageDirection, MessageKind } from '../../conversations/domain/message.entity.js';
 import { UrgentCaseDetector } from '../../safety/domain/urgent-case.detector.js';
-import type { TextToSpeech } from '../../speech/domain/speech.ports.js';
 import type { WorkersService } from '../../workers/application/workers.service.js';
 import type { AgentRunner } from '../domain/agent-runner.port.js';
 import type { InboundMessage } from '../domain/inbound-message.js';
-import { URDU_REPLIES } from '../domain/urdu-replies.js';
+import { LANGUAGE_MENU, REPLIES } from '../domain/replies.js';
 import { AgentOrchestrator } from './agent-orchestrator.service.js';
 import type { ConsentFlow } from './consent-flow.js';
 import type { InboundContentResolver, ResolvedContent } from './inbound-content.resolver.js';
@@ -34,6 +33,7 @@ function setup() {
   const workers = {
     findOrRegister: vi.fn().mockResolvedValue({ worker, isNew: false }),
     deleteAllData: vi.fn(),
+    setLanguage: vi.fn(),
   };
   const conversations = {
     hasProcessed: vi.fn().mockResolvedValue(false),
@@ -64,7 +64,6 @@ function setup() {
       issueTypes: [IssueType.UnpaidSalary, IssueType.PassportHeld],
     }),
   } satisfies AgentRunner;
-  const speech = { synthesize: vi.fn().mockResolvedValue(null) } satisfies TextToSpeech;
 
   const orchestrator = new AgentOrchestrator(
     workers as unknown as WorkersService,
@@ -73,10 +72,9 @@ function setup() {
     content as unknown as InboundContentResolver,
     new UrgentCaseDetector(),
     runner,
-    speech,
     testConfig({ CONVERSATION_HISTORY_LIMIT: 8 }),
   );
-  return { worker, conversation, workers, conversations, consent, content, runner, speech, orchestrator };
+  return { worker, conversation, workers, conversations, consent, content, runner, orchestrator };
 }
 
 describe('AgentOrchestrator', () => {
@@ -85,7 +83,10 @@ describe('AgentOrchestrator', () => {
   it('answers a question with the agent and records both sides of the exchange', async () => {
     const { conversation, conversations, runner, orchestrator } = setup();
 
-    await expect(orchestrator.handle(textMessage('میری تنخواہ نہیں آئی'))).resolves.toEqual({ text: 'جواب' });
+    await expect(orchestrator.handle(textMessage('میری تنخواہ نہیں آئی'))).resolves.toEqual({
+      text: 'جواب',
+      voiceText: 'جواب',
+    });
 
     expect(conversations.history).toHaveBeenCalledWith('conversation-1', 8);
     expect(runner.run).toHaveBeenCalledWith({
@@ -95,6 +96,7 @@ describe('AgentOrchestrator', () => {
         { role: 'assistant', text: 'earlier answer' },
       ],
       context: { workerId: 'worker-1', conversationId: 'conversation-1' },
+      language: 'ur',
     });
     expect(conversations.recordInbound).toHaveBeenCalledWith(conversation, {
       kind: MessageKind.Text,
@@ -129,17 +131,38 @@ describe('AgentOrchestrator', () => {
     const { worker, workers, consent, orchestrator } = setup();
 
     await expect(orchestrator.handle(textMessage('ڈیٹا ختم کریں'))).resolves.toEqual({
-      text: URDU_REPLIES.dataDeleted,
+      text: REPLIES.ur.dataDeleted,
+      voiceText: REPLIES.ur.dataDeleted,
     });
     expect(workers.deleteAllData).toHaveBeenCalledWith(worker);
     expect(consent.decide).not.toHaveBeenCalled();
   });
 
-  it('replies with the consent step and stores nothing until the worker agrees', async () => {
-    const { consent, conversations, runner, orchestrator } = setup();
-    consent.decide.mockResolvedValue({ proceed: false, reply: URDU_REPLIES.greetingAndConsent });
+  it('confirms deletion in the language the command was typed in when no language was chosen', async () => {
+    const { worker, orchestrator } = setup();
+    worker.language = null;
 
-    await expect(orchestrator.handle(textMessage('salam'))).resolves.toEqual({ text: URDU_REPLIES.greetingAndConsent });
+    await expect(orchestrator.handle(textMessage('ডেটা মুছুন'))).resolves.toMatchObject({
+      text: REPLIES.bn.dataDeleted,
+    });
+  });
+
+  it('shows the language menu again, as text only, when the worker asks to change language', async () => {
+    const { worker, workers, consent, orchestrator } = setup();
+
+    await expect(orchestrator.handle(textMessage('زبان'))).resolves.toEqual({ text: LANGUAGE_MENU, voiceText: null });
+    expect(workers.setLanguage).toHaveBeenCalledWith(worker, null);
+    expect(consent.decide).not.toHaveBeenCalled();
+  });
+
+  it('replies with the onboarding step and stores nothing until the worker agrees', async () => {
+    const { consent, conversations, runner, orchestrator } = setup();
+    consent.decide.mockResolvedValue({ proceed: false, reply: REPLIES.ur.greetingAndConsent, speak: true });
+
+    await expect(orchestrator.handle(textMessage('salam'))).resolves.toEqual({
+      text: REPLIES.ur.greetingAndConsent,
+      voiceText: REPLIES.ur.greetingAndConsent,
+    });
     expect(conversations.openFor).not.toHaveBeenCalled();
     expect(runner.run).not.toHaveBeenCalled();
   });
@@ -149,7 +172,8 @@ describe('AgentOrchestrator', () => {
 
     const reply = await orchestrator.handle(textMessage('My company keeps my passport'));
 
-    expect(reply?.text.startsWith(URDU_REPLIES.urgentNotice)).toBe(true);
+    expect(reply?.text.startsWith(REPLIES.ur.urgentNotice)).toBe(true);
+    expect(reply?.voiceText).toBe(reply?.text);
     expect(reply?.text.endsWith('جواب')).toBe(true);
     expect(conversations.recordInbound).toHaveBeenCalledWith(
       expect.anything(),
@@ -167,7 +191,11 @@ describe('AgentOrchestrator', () => {
       attachment: 'معاہدے کا خلاصہ',
     });
 
-    await expect(orchestrator.handle(textMessage('photo'))).resolves.toEqual({ text: 'جواب\n\nمعاہدے کا خلاصہ' });
+    // The card is written only: the voice note speaks the explanation.
+    await expect(orchestrator.handle(textMessage('photo'))).resolves.toEqual({
+      text: 'جواب\n\nمعاہدے کا خلاصہ',
+      voiceText: 'جواب',
+    });
   });
 
   it('sends a fixed reply without the agent when the content needs one', async () => {
@@ -176,13 +204,16 @@ describe('AgentOrchestrator', () => {
       type: 'reply',
       kind: MessageKind.Voice,
       body: '[Voice note not understood]',
-      reply: URDU_REPLIES.voiceNotUnderstood,
+      reply: REPLIES.ur.voiceNotUnderstood,
     });
 
-    await expect(orchestrator.handle(voiceMessage)).resolves.toEqual({ text: URDU_REPLIES.voiceNotUnderstood });
+    await expect(orchestrator.handle(voiceMessage)).resolves.toEqual({
+      text: REPLIES.ur.voiceNotUnderstood,
+      voiceText: REPLIES.ur.voiceNotUnderstood,
+    });
     expect(runner.run).not.toHaveBeenCalled();
     expect(conversations.recordOutbound).toHaveBeenCalledWith(expect.anything(), {
-      body: URDU_REPLIES.voiceNotUnderstood,
+      body: REPLIES.ur.voiceNotUnderstood,
       latencyMs: expect.any(Number),
     });
   });
@@ -191,7 +222,7 @@ describe('AgentOrchestrator', () => {
     const { content, orchestrator } = setup();
     content.resolve.mockRejectedValueOnce(new Error('media download failed'));
 
-    await expect(orchestrator.handle(voiceMessage)).resolves.toEqual({ text: URDU_REPLIES.fallback });
+    await expect(orchestrator.handle(voiceMessage)).resolves.toMatchObject({ text: REPLIES.ur.fallback });
   });
 
   it.each([
@@ -208,31 +239,21 @@ describe('AgentOrchestrator', () => {
     const { runner, conversations, orchestrator } = setup();
     arrange(runner);
 
-    await expect(orchestrator.handle(textMessage('q'))).resolves.toEqual({ text: URDU_REPLIES.fallback });
+    await expect(orchestrator.handle(textMessage('q'))).resolves.toMatchObject({ text: REPLIES.ur.fallback });
     expect(conversations.tagIssue).not.toHaveBeenCalled();
   });
 
-  describe('voice replies', () => {
-    it('adds a voice version when the worker wrote by voice and speech is available', async () => {
-      const { speech, orchestrator } = setup();
-      const audio = { data: Buffer.from('ogg'), mimeType: 'audio/ogg' };
-      speech.synthesize.mockResolvedValue(audio);
+  describe("in the worker's language", () => {
+    it('passes the language to the agent and to the content reader, and uses its fixed replies', async () => {
+      const { worker, content, runner, orchestrator } = setup();
+      worker.language = 'hi';
+      runner.run.mockResolvedValue({ text: null, toolCalls: [], citations: [], issueTypes: [] });
 
-      await expect(orchestrator.handle(voiceMessage)).resolves.toEqual({ text: 'جواب', audio });
-    });
-
-    it('still sends the text when speech fails', async () => {
-      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
-      const { speech, orchestrator } = setup();
-      speech.synthesize.mockRejectedValue(new Error('TTS down'));
-
-      await expect(orchestrator.handle(voiceMessage)).resolves.toEqual({ text: 'جواب' });
-    });
-
-    it('does not speak replies to text messages', async () => {
-      const { speech, orchestrator } = setup();
-      await orchestrator.handle(textMessage('q'));
-      expect(speech.synthesize).not.toHaveBeenCalled();
+      await expect(orchestrator.handle(textMessage('मेरा पासपोर्ट कंपनी के पास है'))).resolves.toMatchObject({
+        text: `${REPLIES.hi.urgentNotice}\n\n${REPLIES.hi.fallback}`,
+      });
+      expect(runner.run).toHaveBeenCalledWith(expect.objectContaining({ language: 'hi' }));
+      expect(content.resolve).toHaveBeenCalledWith(expect.anything(), 'worker-1', 'hi');
     });
   });
 });

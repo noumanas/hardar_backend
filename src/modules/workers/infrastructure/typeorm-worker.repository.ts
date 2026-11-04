@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import type { Repository } from 'typeorm';
+import { MoreThanOrEqual, type Repository } from 'typeorm';
 
 import { ConsentStatus, Worker } from '../domain/worker.entity.js';
-import { WorkerRepository } from '../domain/worker.repository.js';
+import { WorkerRepository, type LanguageCounts } from '../domain/worker.repository.js';
 
 @Injectable()
 export class TypeOrmWorkerRepository implements WorkerRepository {
@@ -40,5 +40,24 @@ export class TypeOrmWorkerRepository implements WorkerRepository {
     const counts = { [ConsentStatus.Pending]: 0, [ConsentStatus.Granted]: 0, [ConsentStatus.Declined]: 0 };
     for (const row of rows) counts[row.status] = Number(row.count);
     return counts;
+  }
+
+  async list(skip: number, take: number): Promise<{ items: Worker[]; total: number }> {
+    const [items, total] = await this.workers.findAndCount({ order: { lastActiveAt: 'DESC' }, skip, take });
+    return { items, total };
+  }
+
+  countActiveSince(since: Date): Promise<number> {
+    return this.workers.countBy({ lastActiveAt: MoreThanOrEqual(since) });
+  }
+
+  async countByLanguage(): Promise<LanguageCounts> {
+    const rows = await this.workers
+      .createQueryBuilder('w')
+      .select(`COALESCE(w.language, 'unset')`, 'language')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('w.language')
+      .getRawMany<{ language: string; count: string }>();
+    return Object.fromEntries(rows.map((row) => [row.language, Number(row.count)]));
   }
 }

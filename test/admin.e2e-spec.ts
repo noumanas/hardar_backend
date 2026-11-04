@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { AgentRunner } from '../src/modules/agent/domain/agent-runner.port.js';
-import { URDU_REPLIES } from '../src/modules/agent/domain/urdu-replies.js';
+import { LANGUAGE_MENU, REPLIES } from '../src/modules/agent/domain/replies.js';
 import { IssueType } from '../src/modules/complaints/domain/issue-type.enum.js';
 import { seedLawArticles } from '../src/database/seeds/law-articles.seed.js';
 import { ADMIN_HEADERS, createTestApp, type TestApp } from './support/test-app.js';
@@ -33,11 +33,12 @@ describe('Admin dashboard API (e2e)', () => {
   });
 
   it('runs the agent pipeline from the playground', async () => {
-    expect((await simulate('971500000011', 'salam')).body).toEqual({
-      reply: URDU_REPLIES.greetingAndConsent,
-      hasAudio: false,
+    expect((await simulate('971500000011', 'salam')).body).toEqual({ reply: LANGUAGE_MENU, hasAudio: false });
+    expect((await simulate('971500000011', '1')).body).toEqual({
+      reply: REPLIES.ur.greetingAndConsent,
+      hasAudio: true,
     });
-    expect((await simulate('971500000011', 'ہاں')).body.reply).toBe(URDU_REPLIES.menu);
+    expect((await simulate('971500000011', 'ہاں')).body.reply).toBe(REPLIES.ur.menu);
     expect((await simulate('971500000011', 'tankhwa nahi aayi')).body.reply).toBe('تنخواہ وقت پر ملنی چاہیے۔');
 
     await simulate('971500000012', 'salam'); // a second worker who never consents

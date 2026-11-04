@@ -1,5 +1,3 @@
-import type { Media } from '../../messaging/domain/messaging-channel.port.js';
-
 export interface MediaReference {
   id: string;
   mimeType: string;
@@ -22,6 +20,9 @@ export type InboundMessage =
 
 export interface OutboundReply {
   text: string;
-  /** Voice version of the reply, sent when the worker wrote by voice and TTS is available. */
-  audio?: Media;
+  /**
+   * What to say in the voice note sent right after the text, or `null` for text only.
+   * It leaves out anything that only makes sense written, such as the contract card.
+   */
+  voiceText: string | null;
 }

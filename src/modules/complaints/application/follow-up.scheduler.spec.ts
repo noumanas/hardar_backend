@@ -8,7 +8,7 @@ import type { WorkersService } from '../../workers/application/workers.service.j
 import { ConsentStatus } from '../../workers/domain/worker.entity.js';
 import { CaseStatus, type ComplaintCase } from '../domain/complaint-case.entity.js';
 import type { ComplaintCaseRepository } from '../domain/complaint-case.repository.js';
-import { FOLLOW_UP_TEXT, FollowUpScheduler } from './follow-up.scheduler.js';
+import { FOLLOW_UP_TEXTS, FollowUpScheduler } from './follow-up.scheduler.js';
 
 const now = new Date('2026-10-08T09:00:00Z');
 
@@ -43,7 +43,7 @@ describe('FollowUpScheduler', () => {
     await expect(scheduler.sendDueFollowUps(now)).resolves.toBe(1);
 
     expect(repository.findDueFollowUps).toHaveBeenCalledWith(now, 50);
-    expect(channel.sendText).toHaveBeenCalledWith('971500000001', FOLLOW_UP_TEXT);
+    expect(channel.sendText).toHaveBeenCalledWith('971500000001', FOLLOW_UP_TEXTS.ur);
     expect(complaintCase).toMatchObject({ status: CaseStatus.FollowUpSent, followUpSentAt: now });
   });
 

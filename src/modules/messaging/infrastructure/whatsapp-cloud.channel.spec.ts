@@ -51,6 +51,7 @@ describe('WhatsAppCloudChannel', () => {
     expect(uploadUrl).toBe(`${GRAPH}/PHONE_ID/media`);
     expect(uploadInit.body).toBeInstanceOf(FormData);
     expect((uploadInit.body as FormData).get('type')).toBe('audio/ogg');
+    expect(((uploadInit.body as FormData).get('file') as File).name).toBe('reply.ogg');
     expect(sentBody(1)).toMatchObject({ type: 'audio', audio: { id: 'media-9' } });
   });
 

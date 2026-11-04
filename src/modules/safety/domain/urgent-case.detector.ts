@@ -12,11 +12,11 @@ export interface UrgentAssessment {
 }
 
 /**
- * Keyword patterns in English, Roman Urdu and Urdu script. Deliberately broad: a false
+ * Keyword patterns in English, Roman Urdu, Urdu, Hindi and Bengali. Deliberately broad: a false
  * alarm only adds a helpline line to the reply, while a miss could leave a worker at risk.
  */
 const PATTERNS: Record<UrgentCategory, RegExp[]> = {
-  [UrgentCategory.PassportHeld]: [/passport/i, /پاسپورٹ/],
+  [UrgentCategory.PassportHeld]: [/passport/i, /پاسپورٹ/, /पासपोर्ट/, /পাসপোর্ট/],
   [UrgentCategory.NoFoodOrHousing]: [
     /\bno (food|water|housing|accommodation|room)\b/i,
     /\b(starving|homeless|hungry)\b/i,
@@ -25,6 +25,15 @@ const PATTERNS: Record<UrgentCategory, RegExp[]> = {
     /بھوکا/,
     /رہائش نہیں/,
     /بے گھر/,
+    /खाना नहीं/,
+    /भूख/,
+    /रहने की जगह नहीं/,
+    /बेघर/,
+    /খাবার নেই/,
+    /খেতে দেয় না/,
+    /ক্ষুধার্ত/,
+    /থাকার জায়গা নেই/,
+    /গৃহহীন/,
   ],
   [UrgentCategory.UnsafeWork]: [
     /\b(unsafe|dangerous|injur(ed|y)|accident|heat ?stroke|fainted)\b/i,
@@ -33,6 +42,16 @@ const PATTERNS: Record<UrgentCategory, RegExp[]> = {
     /زخمی/,
     /حادثہ/,
     /بے ہوش/,
+    /ख़?तरनाक/,
+    /घायल/,
+    /ज़?ख़?्मी/,
+    /हादसा/,
+    /दुर्घटना/,
+    /बेहोश/,
+    /বিপজ্জনক/,
+    /আহত/,
+    /দুর্ঘটনা/,
+    /অজ্ঞান/,
   ],
   [UrgentCategory.Violence]: [
     /\b(beat|beaten|hit me|abuse[ds]?|assault(ed)?|threat(en|ened)?)\b/i,
@@ -40,8 +59,28 @@ const PATTERNS: Record<UrgentCategory, RegExp[]> = {
     /مارا/,
     /مارتا/,
     /دھمکی/,
+    // Not "मारा" alone, which is inside "हमारा" (our).
+    /मुझे मारा/,
+    /मारता/,
+    /मारपीट/,
+    /पीटा/,
+    /धमकी/,
+    /মারধর/,
+    /মেরেছে/,
+    /মারছে/,
+    /হুমকি/,
   ],
-  [UrgentCategory.Confinement]: [/\b(locked|trapped|not allowed to leave)\b/i, /\b(qaid|band kar)\b/i, /قید/, /بند کر/],
+  [UrgentCategory.Confinement]: [
+    /\b(locked|trapped|not allowed to leave)\b/i,
+    /\b(qaid|band kar)\b/i,
+    /قید/,
+    /بند کر/,
+    /क़?ैद/,
+    /बंद कर/,
+    /আটকে রেখেছে/,
+    /বন্দি/,
+    /তালা দিয়ে/,
+  ],
 };
 
 /** FR-11: spots cases where the worker needs an official helpline before anything else. */
