@@ -1,8 +1,12 @@
 import { languageOf, type Language } from '../../workers/domain/language.js';
 
 export interface FixedReplies {
-  /** FR-4: sent once the worker has chosen a language. */
-  greetingAndConsent: string;
+  /**
+   * Sent once the worker has chosen a language, before the menu. Workers are signed up
+   * without a yes/no question, so this says plainly what Haqdar is, that messages are
+   * saved and that the Haqdar team can read them (the menu says how to delete them).
+   */
+  welcome: string;
   menu: string;
   consentDeclined: string;
   /** FR-14. */
@@ -23,12 +27,12 @@ export interface FixedReplies {
  */
 export const REPLIES: Record<Language, FixedReplies> = {
   ur: {
-    greetingAndConsent:
+    welcome:
       'السلام علیکم! میں حقدار ہوں، ایک مفت مددگار۔ میں وکیل نہیں ہوں۔ ' +
-      'میں آپ کو یو اے ای کے لیبر قانون کے بارے میں معلومات دیتا ہوں اور وزارتِ محنت (MOHRE) تک پہنچنے میں مدد کرتا ہوں۔\n\n' +
-      'آپ کے پیغامات پڑھنے کے لیے آپ کی اجازت چاہیے۔ اگر آپ راضی ہیں تو "ہاں" لکھیں، ورنہ "نہیں" لکھیں۔',
+      'میں آپ کو یو اے ای کے لیبر قانون کے بارے میں معلومات دیتا ہوں اور وزارتِ محنت (MOHRE) تک پہنچنے میں مدد کرتا ہوں۔ ' +
+      'آپ کی مدد کے لیے آپ کے پیغامات محفوظ کیے جاتے ہیں، اور حقدار کی ٹیم جوابات کی جانچ کے لیے انہیں دیکھ سکتی ہے۔',
     menu:
-      'شکریہ! میں ان کاموں میں مدد کر سکتا ہوں:\n' +
+      'میں ان کاموں میں مدد کر سکتا ہوں:\n' +
       '1. میرا معاہدہ پڑھیں: معاہدے کی تصویر بھیجیں\n' +
       '2. سوال پوچھیں: اپنے حقوق کے بارے میں\n' +
       '3. میرے پیسوں کا حساب: اوور ٹائم یا سروس کے آخر کی رقم\n' +
@@ -47,12 +51,12 @@ export const REPLIES: Record<Language, FixedReplies> = {
     fallback: 'معاف کیجیے، ابھی جواب دینے میں مسئلہ ہے۔ فوری مدد کے لیے MOHRE کو 600590000 پر کال کریں۔',
   },
   hi: {
-    greetingAndConsent:
+    welcome:
       'नमस्ते! मैं हक़दार हूँ, एक मुफ़्त मददगार। मैं वकील नहीं हूँ। ' +
-      'मैं आपको यूएई के श्रम क़ानून के बारे में जानकारी देता हूँ और श्रम मंत्रालय (MOHRE) तक पहुँचने में मदद करता हूँ।\n\n' +
-      'आपके संदेश पढ़ने के लिए मुझे आपकी अनुमति चाहिए। अगर आप सहमत हैं तो "हाँ" लिखें, नहीं तो "नहीं" लिखें।',
+      'मैं आपको यूएई के श्रम क़ानून के बारे में जानकारी देता हूँ और श्रम मंत्रालय (MOHRE) तक पहुँचने में मदद करता हूँ। ' +
+      'आपकी मदद के लिए आपके संदेश सेव किए जाते हैं, और हक़दार की टीम जवाबों की जाँच के लिए उन्हें देख सकती है।',
     menu:
-      'धन्यवाद! मैं इन कामों में मदद कर सकता हूँ:\n' +
+      'मैं इन कामों में मदद कर सकता हूँ:\n' +
       '1. मेरा अनुबंध पढ़ें: अनुबंध की फ़ोटो भेजें\n' +
       '2. सवाल पूछें: अपने अधिकारों के बारे में\n' +
       '3. मेरे पैसों का हिसाब: ओवरटाइम या नौकरी ख़त्म होने की रक़म (ग्रेच्युटी)\n' +
@@ -71,12 +75,12 @@ export const REPLIES: Record<Language, FixedReplies> = {
     fallback: 'माफ़ कीजिए, अभी जवाब देने में दिक़्क़त है। तुरंत मदद के लिए MOHRE को 600590000 पर कॉल करें।',
   },
   bn: {
-    greetingAndConsent:
+    welcome:
       'আসসালামু আলাইকুম! আমি হকদার, একজন বিনামূল্যের সাহায্যকারী। আমি উকিল নই। ' +
-      'আমি আপনাকে সংযুক্ত আরব আমিরাতের শ্রম আইন সম্পর্কে তথ্য দিই এবং শ্রম মন্ত্রণালয় (MOHRE)-এর কাছে পৌঁছাতে সাহায্য করি।\n\n' +
-      'আপনার বার্তা পড়ার জন্য আপনার অনুমতি দরকার। রাজি থাকলে "হ্যাঁ" লিখুন, না হলে "না" লিখুন।',
+      'আমি আপনাকে সংযুক্ত আরব আমিরাতের শ্রম আইন সম্পর্কে তথ্য দিই এবং শ্রম মন্ত্রণালয় (MOHRE)-এর কাছে পৌঁছাতে সাহায্য করি। ' +
+      'আপনাকে সাহায্য করার জন্য আপনার বার্তা সংরক্ষণ করা হয়, এবং উত্তর যাচাই করতে হকদারের টিম সেগুলো দেখতে পারে।',
     menu:
-      'ধন্যবাদ! আমি এই কাজগুলোতে সাহায্য করতে পারি:\n' +
+      'আমি এই কাজগুলোতে সাহায্য করতে পারি:\n' +
       '1. আমার চুক্তি পড়ুন: চুক্তির ছবি পাঠান\n' +
       '2. প্রশ্ন করুন: আপনার অধিকার সম্পর্কে\n' +
       '3. আমার টাকার হিসাব: ওভারটাইম বা চাকরি শেষের টাকা (গ্র্যাচুইটি)\n' +
@@ -95,12 +99,12 @@ export const REPLIES: Record<Language, FixedReplies> = {
     fallback: 'দুঃখিত, এখন উত্তর দিতে সমস্যা হচ্ছে। দ্রুত সাহায্যের জন্য MOHRE-কে 600590000 নম্বরে কল করুন।',
   },
   en: {
-    greetingAndConsent:
+    welcome:
       'Hello! I am Haqdar, a free helper. I am not a lawyer. ' +
-      'I give you information about UAE labour law and help you reach the Ministry of Human Resources (MOHRE).\n\n' +
-      'I need your permission to read your messages. If you agree, write "yes". If not, write "no".',
+      'I give you information about UAE labour law and help you reach the Ministry of Human Resources (MOHRE). ' +
+      'Your messages are saved so I can help you, and the Haqdar team may read them to check my answers.',
     menu:
-      'Thank you! I can help you with:\n' +
+      'I can help you with:\n' +
       '1. Read my contract: send a photo of your contract\n' +
       '2. Ask a question: about your rights\n' +
       '3. Check my money: overtime or end-of-service pay\n' +
@@ -121,6 +125,9 @@ export const REPLIES: Record<Language, FixedReplies> = {
 };
 
 export const repliesFor = (worker: { language: string | null }): FixedReplies => REPLIES[languageOf(worker)];
+
+/** First contact after the language menu: who Haqdar is, then what it can do. */
+export const welcomeFor = (language: Language): string => `${REPLIES[language].welcome}\n\n${REPLIES[language].menu}`;
 
 /**
  * The first message every new worker gets, in all four languages at once because their

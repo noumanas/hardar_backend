@@ -31,8 +31,8 @@ describe('Admin WhatsApp numbers API (e2e)', () => {
 
   beforeAll(async () => {
     t = await createTestApp({ runner });
-    await chat(URDU_WORKER, 'salam', '1', 'ہاں', 'میری تنخواہ نہیں آئی', 'کمپنی نے پاسپورٹ رکھ لیا');
-    await chat(HINDI_WORKER, 'namaste', '2', 'हाँ', 'मेरा वेतन नहीं आया');
+    await chat(URDU_WORKER, 'salam', '1', 'میری تنخواہ نہیں آئی', 'کمپنی نے پاسپورٹ رکھ لیا');
+    await chat(HINDI_WORKER, 'namaste', '2', 'मेरा वेतन नहीं आया');
     await chat(NEW_WORKER, 'hello');
   });
   afterAll(() => t.close());

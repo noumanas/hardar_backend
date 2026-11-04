@@ -46,10 +46,9 @@ describe('Agent flow with real tools (e2e)', () => {
       ]),
     );
 
-  it('chooses Urdu and agrees to consent first', async () => {
+  it('chooses Urdu first (sign-up is automatic)', async () => {
     await send('salam');
     await send('1');
-    await send('ہاں');
     expect(generateContent).not.toHaveBeenCalled();
   });
 

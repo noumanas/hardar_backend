@@ -1,4 +1,4 @@
-import { LANGUAGE_MENU, REPLIES } from '../src/modules/agent/domain/replies.js';
+import { LANGUAGE_MENU, REPLIES, welcomeFor } from '../src/modules/agent/domain/replies.js';
 import type { AgentRunner } from '../src/modules/agent/domain/agent-runner.port.js';
 import type { ContractExtractor } from '../src/modules/contracts/domain/contract-extractor.port.js';
 import { IssueType } from '../src/modules/complaints/domain/issue-type.enum.js';
@@ -94,21 +94,20 @@ describe('WhatsApp webhook (e2e)', () => {
     });
   });
 
-  /** First contact up to the menu: language menu, choice, consent. */
+  /** First contact up to the menu: language menu, then a choice (sign-up is automatic). */
   async function onboard(phone = PHONE, choice = '1') {
     await send(textFrom(phone, 'salam'));
     await send(textFrom(phone, choice));
-    await send(textFrom(phone, choice === '4' ? 'yes' : 'ہاں'));
   }
 
-  it('runs the full first-contact flow: language, consent, menu, then an agent answer', async () => {
+  it('runs the full first-contact flow: language, automatic sign-up with the welcome, then an agent answer', async () => {
     expect(await send(textFrom(PHONE, 'salam'))).toBe(LANGUAGE_MENU);
     expect(t.channel.audios).toEqual([]); // the four-language menu is text only
 
-    expect(await send(textFrom(PHONE, '1'))).toBe(REPLIES.ur.greetingAndConsent);
-    expect(await count('messages')).toBe(0); // nothing stored before consent
-
-    expect(await send(textFrom(PHONE, 'ہاں'))).toBe(REPLIES.ur.menu);
+    expect(await send(textFrom(PHONE, '1'))).toBe(welcomeFor('ur'));
+    expect(await count('messages')).toBe(0); // the onboarding exchange itself is not stored
+    const [signedUp] = await t.dataSource.query('SELECT consent_status FROM workers');
+    expect(signedUp.consent_status).toBe('granted'); // no yes/no question
 
     const answer = await send(textFrom(PHONE, 'کیا کمپنی میرا پاسپورٹ رکھ سکتی ہے؟'));
     expect(answer).toBe(`${REPLIES.ur.urgentNotice}\n\nآپ کی کمپنی پاسپورٹ نہیں رکھ سکتی۔`);
@@ -194,8 +193,7 @@ describe('WhatsApp webhook (e2e)', () => {
   describe('languages and voice notes', () => {
     it('talks to a worker in the language they chose, in text and as a voice note', async () => {
       expect(await send(textFrom(PHONE, 'hello'))).toBe(LANGUAGE_MENU);
-      expect(await send(textFrom(PHONE, '4'))).toBe(REPLIES.en.greetingAndConsent);
-      expect(await send(textFrom(PHONE, 'yes'))).toBe(REPLIES.en.menu);
+      expect(await send(textFrom(PHONE, '4'))).toBe(welcomeFor('en'));
 
       runner.run.mockResolvedValueOnce({
         text: 'Your salary must be paid on time.',
@@ -207,7 +205,7 @@ describe('WhatsApp webhook (e2e)', () => {
       expect(runner.run).toHaveBeenCalledWith(expect.objectContaining({ language: 'en' }));
 
       // Every reply after the language menu also went out as a voice note.
-      expect(t.channel.audios).toHaveLength(3);
+      expect(t.channel.audios).toHaveLength(2);
       expect(t.channel.audios.every(({ to, audio }) => to === PHONE && audio.mimeType === 'audio/ogg')).toBe(true);
     });
 
@@ -238,7 +236,7 @@ describe('WhatsApp webhook (e2e)', () => {
         await postWebhook(failing.http, whatsAppWebhook([textFrom(PHONE, '2')])).expect(200);
         await failing.drain();
 
-        expect(failing.channel.lastTextTo(PHONE)).toBe(REPLIES.hi.greetingAndConsent);
+        expect(failing.channel.lastTextTo(PHONE)).toBe(welcomeFor('hi'));
         expect(failing.channel.audios).toEqual([]);
       } finally {
         await failing.close();

@@ -157,11 +157,11 @@ describe('AgentOrchestrator', () => {
 
   it('replies with the onboarding step and stores nothing until the worker agrees', async () => {
     const { consent, conversations, runner, orchestrator } = setup();
-    consent.decide.mockResolvedValue({ proceed: false, reply: REPLIES.ur.greetingAndConsent, speak: true });
+    consent.decide.mockResolvedValue({ proceed: false, reply: REPLIES.ur.welcome, speak: true });
 
     await expect(orchestrator.handle(textMessage('salam'))).resolves.toEqual({
-      text: REPLIES.ur.greetingAndConsent,
-      voiceText: REPLIES.ur.greetingAndConsent,
+      text: REPLIES.ur.welcome,
+      voiceText: REPLIES.ur.welcome,
     });
     expect(conversations.openFor).not.toHaveBeenCalled();
     expect(runner.run).not.toHaveBeenCalled();

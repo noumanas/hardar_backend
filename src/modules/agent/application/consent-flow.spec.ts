@@ -1,8 +1,9 @@
 import { aWorker } from '../../../../test/support/builders.js';
 import type { WorkersService } from '../../workers/application/workers.service.js';
+import type { Language } from '../../workers/domain/language.js';
 import { ConsentStatus } from '../../workers/domain/worker.entity.js';
 import type { InboundMessage } from '../domain/inbound-message.js';
-import { LANGUAGE_MENU, REPLIES } from '../domain/replies.js';
+import { LANGUAGE_MENU, REPLIES, welcomeFor } from '../domain/replies.js';
 import { ConsentFlow } from './consent-flow.js';
 
 const textMessage = (text: string): InboundMessage => ({ kind: 'text', from: '9715', externalId: 'w', text });
@@ -15,7 +16,10 @@ const voiceMessage: InboundMessage = {
 
 function setup() {
   const workers = {
-    recordConsent: vi.fn(),
+    recordConsent: vi.fn(async (worker: { consentStatus: ConsentStatus }, granted: boolean) => {
+      worker.consentStatus = granted ? ConsentStatus.Granted : ConsentStatus.Declined;
+      return worker;
+    }),
     setLanguage: vi.fn(async (worker: { language: string | null }, language: string | null) => {
       worker.language = language;
       return worker;
@@ -24,12 +28,12 @@ function setup() {
   return { workers, flow: new ConsentFlow(workers as unknown as WorkersService) };
 }
 
-describe('ConsentFlow', () => {
-  const pending = (language: 'ur' | 'hi' | 'bn' | 'en' | null = 'ur') =>
-    aWorker({ consentStatus: ConsentStatus.Pending, language });
+const pending = (language: Language | null = 'ur') => aWorker({ consentStatus: ConsentStatus.Pending, language });
+const declined = (language: Language | null = 'ur') => aWorker({ consentStatus: ConsentStatus.Declined, language });
 
-  describe('choosing a language', () => {
-    it('shows the language menu, as text only, to a worker who has not chosen one', async () => {
+describe('ConsentFlow', () => {
+  describe('a new worker', () => {
+    it('gets the language menu, as text only, until they choose', async () => {
       const { workers, flow } = setup();
 
       await expect(flow.decide(pending(null), textMessage('salam'))).resolves.toEqual({
@@ -39,6 +43,7 @@ describe('ConsentFlow', () => {
       });
       await expect(flow.decide(pending(null), voiceMessage)).resolves.toMatchObject({ reply: LANGUAGE_MENU });
       expect(workers.setLanguage).not.toHaveBeenCalled();
+      expect(workers.recordConsent).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -46,74 +51,86 @@ describe('ConsentFlow', () => {
       ['2', 'hi'],
       ['3', 'bn'],
       ['4', 'en'],
-    ] as const)('saves choice %j as %s and asks for consent in that language', async (text, language) => {
+    ] as const)('choosing %j is signed up automatically and welcomed in %s', async (text, language) => {
       const { workers, flow } = setup();
       const worker = pending(null);
 
       await expect(flow.decide(worker, textMessage(text))).resolves.toEqual({
         proceed: false,
-        reply: REPLIES[language].greetingAndConsent,
+        reply: welcomeFor(language),
         speak: true,
       });
       expect(workers.setLanguage).toHaveBeenCalledWith(worker, language);
+      expect(workers.recordConsent).toHaveBeenCalledWith(worker, true);
     });
 
-    it('takes a worker who already agreed straight to the menu after switching language', async () => {
-      const { flow } = setup();
-      const worker = aWorker({ language: null });
-
-      await expect(flow.decide(worker, textMessage('বাংলা'))).resolves.toMatchObject({ reply: REPLIES.bn.menu });
+    it('is told what Haqdar is, that messages are saved, and how to delete them', () => {
+      expect(welcomeFor('en')).toContain('I am not a lawyer');
+      expect(welcomeFor('en')).toContain('Your messages are saved');
+      expect(welcomeFor('en')).toContain('delete my data');
     });
   });
 
-  it('lets a worker who has agreed straight through', async () => {
+  it('lets a signed-up worker straight through', async () => {
     const { flow } = setup();
     await expect(flow.decide(aWorker(), textMessage('hi'))).resolves.toEqual({ proceed: true });
   });
 
-  it('records "yes" in the worker\'s language and shows the menu', async () => {
-    const { workers, flow } = setup();
-    const worker = pending('hi');
-
-    await expect(flow.decide(worker, textMessage('हाँ'))).resolves.toEqual({
-      proceed: false,
-      reply: REPLIES.hi.menu,
-      speak: true,
+  describe('switching language', () => {
+    it('takes a signed-up worker straight to the menu', async () => {
+      const { workers, flow } = setup();
+      await expect(flow.decide(aWorker({ language: null }), textMessage('বাংলা'))).resolves.toMatchObject({
+        reply: REPLIES.bn.menu,
+      });
+      expect(workers.recordConsent).not.toHaveBeenCalled();
     });
-    expect(workers.recordConsent).toHaveBeenCalledWith(worker, true);
-  });
 
-  it('records "no" and explains that nothing will be stored', async () => {
-    const { workers, flow } = setup();
-    const worker = pending();
-
-    await expect(flow.decide(worker, textMessage('nahi'))).resolves.toEqual({
-      proceed: false,
-      reply: REPLIES.ur.consentDeclined,
-      speak: true,
-    });
-    expect(workers.recordConsent).toHaveBeenCalledWith(worker, false);
-  });
-
-  it('asks again when the answer is neither yes nor no, or not text', async () => {
-    const { flow } = setup();
-
-    await expect(flow.decide(pending('en'), textMessage('what is this?'))).resolves.toMatchObject({
-      reply: REPLIES.en.greetingAndConsent,
-    });
-    await expect(flow.decide(pending(), voiceMessage)).resolves.toMatchObject({
-      reply: REPLIES.ur.greetingAndConsent,
+    it('does not sign up a worker who said no', async () => {
+      const { workers, flow } = setup();
+      await expect(flow.decide(declined(null), textMessage('4'))).resolves.toMatchObject({
+        reply: REPLIES.en.consentDeclined,
+      });
+      expect(workers.recordConsent).not.toHaveBeenCalled();
     });
   });
 
-  it('reminds a worker who declined how to start, until they say yes', async () => {
-    const { workers, flow } = setup();
-    const declined = aWorker({ consentStatus: ConsentStatus.Declined });
+  describe('a worker who said no', () => {
+    it('is reminded how to start, until they say yes', async () => {
+      const { workers, flow } = setup();
+      const worker = declined();
 
-    await expect(flow.decide(declined, textMessage('help'))).resolves.toMatchObject({
-      reply: REPLIES.ur.consentDeclined,
+      await expect(flow.decide(worker, textMessage('help'))).resolves.toMatchObject({
+        reply: REPLIES.ur.consentDeclined,
+      });
+      expect(workers.recordConsent).not.toHaveBeenCalled();
+
+      await expect(flow.decide(worker, textMessage('yes'))).resolves.toMatchObject({ reply: REPLIES.ur.menu });
+      expect(workers.recordConsent).toHaveBeenCalledWith(worker, true);
     });
-    await expect(flow.decide(declined, textMessage('yes'))).resolves.toMatchObject({ reply: REPLIES.ur.menu });
-    expect(workers.recordConsent).toHaveBeenCalledWith(declined, true);
+  });
+
+  describe('a worker asked the old consent question', () => {
+    it('is signed up and has their question answered straight away', async () => {
+      const { workers, flow } = setup();
+      const worker = pending('hi');
+
+      await expect(flow.decide(worker, textMessage('मेरा वेतन नहीं आया'))).resolves.toEqual({ proceed: true });
+      expect(workers.recordConsent).toHaveBeenCalledWith(worker, true);
+    });
+
+    it('gets the menu after answering yes', async () => {
+      const { flow } = setup();
+      await expect(flow.decide(pending('hi'), textMessage('हाँ'))).resolves.toMatchObject({ reply: REPLIES.hi.menu });
+    });
+
+    it('can still say no', async () => {
+      const { workers, flow } = setup();
+      const worker = pending();
+
+      await expect(flow.decide(worker, textMessage('nahi'))).resolves.toMatchObject({
+        reply: REPLIES.ur.consentDeclined,
+      });
+      expect(workers.recordConsent).toHaveBeenCalledWith(worker, false);
+    });
   });
 });

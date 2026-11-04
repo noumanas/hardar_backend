@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { WorkersService } from '../../workers/application/workers.service.js';
 import { ConsentStatus, type Worker } from '../../workers/domain/worker.entity.js';
 import type { InboundMessage } from '../domain/inbound-message.js';
-import { LANGUAGE_MENU, repliesFor } from '../domain/replies.js';
+import { LANGUAGE_MENU, repliesFor, welcomeFor } from '../domain/replies.js';
 import { parseConsentAnswer, parseLanguageChoice } from './commands.js';
 
 export type ConsentDecision =
@@ -12,9 +12,10 @@ export type ConsentDecision =
   | { proceed: false; reply: string; speak: boolean };
 
 /**
- * Onboarding before any message is processed. First the worker picks a language from the
- * menu; then (FR-4) they get the "not a lawyer" notice and the consent question in that
- * language. Nothing they send is processed or stored until they say yes.
+ * Onboarding before any message is processed. The worker picks a language from the menu
+ * and is then signed up automatically: there is no yes/no question. The welcome tells them
+ * what Haqdar is, that their messages are saved and seen by the Haqdar team, and the menu
+ * says how to delete everything. A worker who said "no" earlier stays out until they say yes.
  */
 @Injectable()
 export class ConsentFlow {
@@ -24,18 +25,22 @@ export class ConsentFlow {
     if (!worker.language) return this.chooseLanguage(worker, message);
     if (worker.hasConsented) return { proceed: true };
 
-    const replies = repliesFor(worker);
     const answer = message.kind === 'text' ? parseConsentAnswer(message.text) : null;
-    if (answer !== null) {
-      await this.workers.recordConsent(worker, answer);
-      return { proceed: false, reply: answer ? replies.menu : replies.consentDeclined, speak: true };
+
+    if (worker.consentStatus === ConsentStatus.Declined) {
+      if (!answer) return { proceed: false, reply: repliesFor(worker).consentDeclined, speak: true };
+      await this.workers.recordConsent(worker, true);
+      return { proceed: false, reply: repliesFor(worker).menu, speak: true };
     }
 
-    return {
-      proceed: false,
-      reply: worker.consentStatus === ConsentStatus.Declined ? replies.consentDeclined : replies.greetingAndConsent,
-      speak: true,
-    };
+    // Pending with a language: asked the old consent question before automatic sign-up.
+    if (answer === false) {
+      await this.workers.recordConsent(worker, false);
+      return { proceed: false, reply: repliesFor(worker).consentDeclined, speak: true };
+    }
+    await this.workers.recordConsent(worker, true);
+    // A plain "yes" gets the menu; anything else is a real question and is answered at once.
+    return answer ? { proceed: false, reply: repliesFor(worker).menu, speak: true } : { proceed: true };
   }
 
   private async chooseLanguage(worker: Worker, message: InboundMessage): Promise<ConsentDecision> {
@@ -44,7 +49,15 @@ export class ConsentFlow {
 
     await this.workers.setLanguage(worker, choice);
     const replies = repliesFor({ language: choice });
-    // A worker who agreed before and is only switching language goes straight to the menu.
-    return { proceed: false, reply: worker.hasConsented ? replies.menu : replies.greetingAndConsent, speak: true };
+
+    // Only switching language: a signed-up worker goes straight to the menu, and a worker
+    // who said no is reminded how to start.
+    if (worker.hasConsented) return { proceed: false, reply: replies.menu, speak: true };
+    if (worker.consentStatus === ConsentStatus.Declined) {
+      return { proceed: false, reply: replies.consentDeclined, speak: true };
+    }
+
+    await this.workers.recordConsent(worker, true);
+    return { proceed: false, reply: welcomeFor(choice), speak: true };
   }
 }
